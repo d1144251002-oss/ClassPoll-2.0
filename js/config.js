@@ -5,7 +5,7 @@
  * 靜態 GitHub Pages 網頁的此檔是公開的，所以資料保護全部依靠 RLS。
  */
 export const SUPABASE_URL = 'https://mexndpdexhhqshcwyqxk.supabase.co/rest/v1/';
-export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_你的公開金鑰';
+export const SUPABASE_PUBLISHABLE_KEY = 'sb_secret_dSQvv-CnQZt7b1-YgjXVPw_SwL6h0Pj';
 
 // 可自行修改品牌名稱，不影響資料庫。
 export const APP_NAME = 'ClassPoll 2.0';
