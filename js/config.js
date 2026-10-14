@@ -4,7 +4,7 @@
  * 只允許 Publishable key (sb_publishable_...)；絕對不可放 Secret / service_role key。
  * 靜態 GitHub Pages 網頁的此檔是公開的，所以資料保護全部依靠 RLS。
  */
-export const SUPABASE_URL = 'https://mexndpdexhhqshcwyqxk.supabase.co/rest/v1/';
+export const SUPABASE_URL = 'https://mexndpdexhhqshcwyqxk.supabase.co/';
 export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_XqdRTjYf9JaPCjpn-0jJQA_BZSefPZx';
 
 // 可自行修改品牌名稱，不影響資料庫。
