@@ -191,7 +191,7 @@ function renderOverview(){
  txt('overviewQuestion',active?.prompt||'目前沒有正在作答的題目');
  txt('overviewRoom',room?.title||'請先建立教室');txt('overviewRoomCode',room?`教室代碼：${room.code}`:'—');
  const box=$('overviewQr');box.innerHTML='';
- if(room){if(window.QRCode){new window.QRCode(box,{text:localLink('student.html',room.code),width:126,height:126,correctLevel:window.QRCode.CorrectLevel.M});}
+ if(room){if(window.QRCode){new window.QRCode(box,{text:localLink('index.html',room.code),width:126,height:126,correctLevel:window.QRCode.CorrectLevel.M});}
  else {box.innerHTML='<p class="muted">QR Code 元件未載入，請使用複製連結。</p>';}}
  chartLive=barChart(chartLive,'liveChart',active?asOptions(active.options):[],active?optionCounts(active.id,asOptions(active.options).length):[]);
 }
@@ -389,8 +389,8 @@ function wire(){
  $('roomSelect').addEventListener('change',async e=>{roomId=e.target.value;showIssuedForRoom();await refreshRoom();});
  $('selectBank').addEventListener('change',e=>{const b=byId(bank,e.target.value);if(b)loadBankToLive(b);});
  $('refreshBtn').addEventListener('click',refreshAll);
- $('copyInvite').addEventListener('click',()=>room?navigator.clipboard.writeText(localLink('student.html',room.code)).then(()=>toast('學生連結已複製')).catch(e=>failure(e,'無法複製')):toast('請先選擇教室',true));
- $('copyLiveLink').addEventListener('click',()=>room?navigator.clipboard.writeText(localLink('student.html',room.code)).then(()=>toast('學生連結已複製')).catch(e=>failure(e,'無法複製')):toast('請先選擇教室',true));
+ $('copyInvite').addEventListener('click',()=>room?navigator.clipboard.writeText(localLink('index.html',room.code)).then(()=>toast('學生連結已複製')).catch(e=>failure(e,'無法複製')):toast('請先選擇教室',true));
+ $('copyLiveLink').addEventListener('click',()=>room?navigator.clipboard.writeText(localLink('index.html',room.code)).then(()=>toast('學生連結已複製')).catch(e=>failure(e,'無法複製')):toast('請先選擇教室',true));
  $('exportCodes').addEventListener('click',()=>exportRows(codes,`ClassPoll-個人入班碼-${room?.code||''}`));
  $('exportAttendance').addEventListener('click',exportAttendance);
  $('exportScores').addEventListener('click',()=>exportRows(computeReports().scores,`ClassPoll-成績-${room?.code||''}`));
@@ -401,6 +401,10 @@ window.addEventListener('load',async()=>{
  wire();if(!guardConfig())return;db=client('teacher');if(!db)return;
  setErrorReporter(db,'teacher',()=>roomId);
  try{await verifyTeacher();
+ const requestedSection=new URLSearchParams(location.search).get('section');
+ if(authorized && ['overview','rooms','students','bank','live','qna','reports','audit'].includes(requestedSection)){
+   activateTab(requestedSection);
+ }
  db.auth.onAuthStateChange((event)=>{
    if(event==='SIGNED_OUT'){
      clearPrivateState();
