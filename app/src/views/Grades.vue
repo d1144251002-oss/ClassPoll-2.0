@@ -4,6 +4,11 @@ import {db,rpc,typedError} from '../services/api';
 import {flash} from '../services/session';
 type Course={id:string;code:string;title:string};
 type Grade={student_no:string;display_name:string;attendance_pct:number|null;quiz_pct:number|null;assignment_pct:number|null;final_pct:number|null;reviewed_assignments:number};
+type Session={id:string;session_on:string;title:string};
+type Student={id:string;student_no:string;display_name:string};
+type Question={id:string;prompt:string;linked:boolean};
+const sessions=ref<Session[]>([]),roster=ref<Student[]>([]),questions=ref<Question[]>([]);
+const pickedSession=ref(''),pickedStudent=ref(''),isPresent=ref(true),pickedQuestion=ref('');
 const courses=ref<Course[]>([]),course=ref(''),grades=ref<Grade[]>([]),error=ref('');
 const attendance=ref(20),quiz=ref(40),assignment=ref(40),day=ref(''),dayName=ref('');
 async function refresh(){
@@ -11,7 +16,15 @@ async function refresh(){
  catch(e){error.value=typedError(e)}
 }
 async function loadGrades(){if(!course.value){grades.value=[];return}
- try{grades.value=await rpc<Grade[]>(db(),'cp3_gradebook',{p_course:course.value})||[]}catch(e){error.value=typedError(e)}
+ try{
+  const [g,s,students,q]=await Promise.all([
+   rpc<Grade[]>(db(),'cp3_gradebook',{p_course:course.value}),
+   rpc<Session[]>(db(),'cp3_sessions_list',{p_course:course.value}),
+   rpc<Student[]>(db(),'cp3_course_roster',{p_course:course.value}),
+   rpc<Question[]>(db(),'cp3_course_question_candidates',{p_course:course.value})
+  ]);
+  grades.value=g||[];sessions.value=s||[];roster.value=students||[];questions.value=q||[];
+ }catch(e){error.value=typedError(e)}
 }
 async function saveWeights(){
  if(attendance.value+quiz.value+assignment.value!==100){error.value='三種成績權重加總須等於 100';return}
@@ -28,6 +41,16 @@ function csv(){
  const blob=new Blob(['\uFEFF'+lines.map(r=>r.map(safe).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8'});
  const url=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=url;anchor.download='ClassPoll3-成績覆核.csv';anchor.click();setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
+async function markAttendance(){
+ if(!pickedSession.value||!pickedStudent.value)return;
+ try{await rpc(db(),'cp3_attendance_set',{p_session:pickedSession.value,p_student:pickedStudent.value,p_present:isPresent.value});flash('已儲存本課程出席紀錄');await loadGrades()}
+ catch(e){error.value=typedError(e)}
+}
+async function linkQuestion(){
+ if(!pickedQuestion.value)return;
+ try{await rpc(db(),'cp3_course_question_link',{p_course:course.value,p_question:pickedQuestion.value});flash('已將測驗題目納入此課程成績');await loadGrades()}
+ catch(e){error.value=typedError(e)}
+}
 watch(course,loadGrades);onMounted(refresh);
 </script>
 <template>
@@ -37,6 +60,21 @@ watch(course,loadGrades);onMounted(refresh);
  <div v-if="course" class="grid-2" style="margin-bottom:18px">
  <form class="panel stack" @submit.prevent="saveWeights"><h2>成績權重</h2><div class="grid-3"><label>出席 %<input type="number" min="0" max="100" v-model.number="attendance"/></label><label>測驗 %<input type="number" min="0" max="100" v-model.number="quiz"/></label><label>作業 %<input type="number" min="0" max="100" v-model.number="assignment"/></label></div><p class="muted">合計 {{attendance+quiz+assignment}}%</p><button class="primary">更新</button></form>
  <form class="panel stack" @submit.prevent="saveSession"><h2>教學課次</h2><label>日期<input v-model="day" type="date" required/></label><label>名稱<input v-model.trim="dayName" maxlength="100" required/></label><button class="primary">新增課次</button></form>
+ </div>
+ <div v-if="course" class="grid-2" style="margin-bottom:18px">
+  <form class="panel stack" @submit.prevent="markAttendance">
+   <h2>課次出席登記</h2>
+   <label>教學課次<select v-model="pickedSession" required><option value="">選擇課次</option><option v-for="s in sessions" :key="s.id" :value="s.id">{{s.session_on}} · {{s.title}}</option></select></label>
+   <label>修課學生<select v-model="pickedStudent" required><option value="">選擇學生</option><option v-for="s in roster" :key="s.id" :value="s.id">{{s.student_no}} · {{s.display_name}}</option></select></label>
+   <label><input type="checkbox" v-model="isPresent" style="width:auto"/> 出席</label>
+   <button type="submit" class="primary" :disabled="!pickedSession||!pickedStudent">儲存出席</button>
+  </form>
+  <form class="panel stack" @submit.prevent="linkQuestion">
+   <h2>連結課程測驗題目</h2>
+   <p class="muted">必須使用已結束的測驗題目，且每題只能歸屬一門課，避免跨課程誤算成績。</p>
+   <label>已結束題目<select v-model="pickedQuestion" required><option value="">選擇題目</option><option v-for="q in questions" :key="q.id" :value="q.id">{{q.linked?'✓ 已連結 · ':''}}{{q.prompt}}</option></select></label>
+   <button class="primary" :disabled="!pickedQuestion">連結測驗至本課程</button>
+  </form>
  </div>
  <section class="panel"><div class="flex-space"><h2>學生學習成績</h2><button class="outline" :disabled="!grades.length" @click="csv">匯出覆核 CSV</button></div>
  <div v-if="!grades.length" class="empty">目前沒有成績資料。</div><div v-else class="table-wrap"><table><thead><tr><th>學生</th><th>出席</th><th>測驗</th><th>作業</th><th>加權</th><th>作業覆核</th></tr></thead><tbody>
