@@ -40,7 +40,7 @@ jobs:
       - name: Apply baseline classroom, ballots and new platform modules
         run: |
           set -euo pipefail
-          for file in supabase/01_install.sql supabase/07_governance_ballots.sql supabase/08_ballot_draft_update.sql supabase/09_platform_core.sql supabase/10_classroom_qna.sql supabase/11_academic_core.sql; do
+          for file in supabase/01_install.sql supabase/07_governance_ballots.sql supabase/08_ballot_draft_update.sql supabase/09_platform_core.sql supabase/10_classroom_qna.sql supabase/11_academic_core.sql supabase/12_academic_workflows.sql; do
             echo "Testing database migration: $file"
             psql -X -v ON_ERROR_STOP=1 -f "$file" >/dev/null
           done
@@ -48,3 +48,5 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db-platform-integration.sql
       - name: Verify academic lifecycle and non-destructive student removal
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db-cp3-integration.sql
+      - name: Verify class announcements, student receipts and grade weights
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db-cp3-workflows.sql
