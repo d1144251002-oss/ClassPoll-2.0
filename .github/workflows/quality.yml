@@ -23,6 +23,8 @@ jobs:
           node --check js/common.js
           node --check js/student.js
           node --check js/teacher.js
+          node --check js/ballots.js
+          node --check js/vote.js
       - name: Validate pages, imports, config, SQL and RLS
         run: node scripts/check-static.mjs
       - name: Test Taiwan calendar, class participation, and escaping behavior
