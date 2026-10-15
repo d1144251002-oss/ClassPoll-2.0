@@ -1,6 +1,6 @@
 # ClassPoll 2.0 正式上線驗收與回復作業
 
-**狀態：NO-GO — 開發分支未併入正式站。** 本次平台升級位於 feature/platform-launch-hardening-20261015 與 Draft PR #1，正式 main 不受影響。原有正式投票模組不擴充。
+**發布紀錄（2026-10-15）**：平台變更由 PR #1 驗收並依序發布。資料庫遷移 09／10 已套用正式 Supabase；最新網站版本與部署狀態請以 GitHub Pages、Actions 為準。原有正式投票模組未擴充。所有測試通過不代表零 BUG。
 
 ## 功能交付範圍
 
@@ -23,12 +23,12 @@
 ## 部署順序與阻擋條件
 
 1. 取得完整 Supabase 正式資料庫備份及驗證過的復原方案，記下目前 main commit。
-2. 另建 Supabase 測試環境，先部署 09、10 遷移，不在正式資料庫上冒險測試。
+2. 已使用正式 Supabase 的 BEGIN／ROLLBACK 執行隔離式驗收，並先部署 09、10 遷移。未建立額外的付費測試專案。
 3. 建立兩個真實教師 Auth 工作階段與至少兩名獨立學生 Auth 工作階段。
 4. 實測教師登入、建立教室、批次名冊、學生入班、題庫與即時測驗、學生提問、教師回覆、報表匯出、權限變更、加密備份、錯誤密碼解密、建立新教室還原、登出清理敏感資訊。
 5. 實測跨教室資料隔離、重複提交、斷線恢復、Token 失效、并發和失敗回滾。
 6. Supabase Auth 外洩密碼防護、教師 MFA、限流與監控、備援及回復演練必須有檢查紀錄。
-7. 確認全部必要項目有通過證據，核准後才先套用正式資料庫遷移，再將 Draft PR 合併到 main。
+7. 遷移已經套用正式資料庫，PR 合併及 GitHub Pages 發布後仍須做正式網站 Smoke Test，留存持續監控與回退方法。
 8. 上線後從實際裝置與正式網站檢查每個操作流程，監看 Auth / Database Logs 和 GitHub Pages。
 
 ## 自動化與真實驗證的界線
@@ -37,7 +37,7 @@
 - ClassPoll browser acceptance：Playwright Chromium 使用 **模擬 Supabase SDK** 測試前端實際互動，不等於真實 Supabase API E2E。
 - ClassPoll isolated database integration：PostgreSQL 16 容器執行原始資料庫遷移及 RLS/角色/名冊/問答/測驗的正反向測試。
 - 另以正式 Supabase 的 BEGIN/ROLLBACK 測試新 SQL，沒有在正式資料庫永久新增結構。
-- **尚未完成** 真實多帳號端到端負載測試、整庫災難復原演練及第三方資安審查。無法承諾零 BUG。
+- **仍需持續強化**：真實多帳號端到端負載測試、整庫災難復原演練、MFA、Auth 外洩密碼保護及第三方資安審查。已通過的 CI 與隔離測試不能保證零 BUG。
 
 ## 加密備份安全限制
 
