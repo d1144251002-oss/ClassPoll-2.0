@@ -6,8 +6,17 @@
   {...room,role:'owner',students:2,active_students:2,present_today:1,questions:3,live_questions:1,answers:3,recent_errors:0},
   {...room,id:'33333333-3333-4333-8333-333333333333',code:'TEST02',title:'只讀授權班',role:'auditor',students:3,active_students:3,present_today:2,questions:5,live_questions:0,answers:9,recent_errors:1}
  ]};
+ const student={id:'44444444-4444-4444-8444-444444444444',room_id:room.id,student_no:'QA123',display_name:'王同學',is_active:true,last_seen:null};
+ const question={id:'88888888-8888-4888-8888-888888888888',room_id:room.id,
+  prompt:'2+2 等於多少？',options:['3','4'],points:5,status:'closed',
+  allow_changes:false,created_at:'2026-10-15T00:00:00Z',published_at:'2026-10-15T00:00:00Z',ends_at:null};
+ const records={cp2_rooms:[room],cp2_students:[student],cp2_questions:[question],
+  cp2_answer_keys:[{question_id:question.id,correct_index:1}],
+  cp2_votes:[{id:'99999999-9999-4999-8999-999999999999',question_id:question.id,
+   student_id:student.id,choice:1,created_at:'2026-10-15T00:10:00Z',updated_at:'2026-10-15T00:10:00Z'}],
+  cp2_attendance:[],cp2_bank:[],cp2_audit:[],cp2_errors:[]};
  const chain=table=>{
-  const data=table==='cp2_rooms'?[room]:[];
+  const data=records[table]||[];
   return {select(){return this},eq(){return this},in(){return this},order(){return this},range(){return this},
    limit(){return this},maybeSingle:async()=>({data:table==='cp2_teachers'?{user_id:teacher.id}:null,error:null}),
    then(resolve,reject){return Promise.resolve({data,error:null}).then(resolve,reject)}};
