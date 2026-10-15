@@ -4,7 +4,13 @@ let db=null, user=null, authorized=false, tab='overview', roomId='', room=null, 
 let rooms=[],students=[],attendance=[],bank=[],questions=[],keys=[],votes=[],audit=[],errors=[],codes=[];
 let voteChannel=null,questionChannel=null, chartLive=null,chartPoll=null,chartAccuracy=null;
 let interval=null,refreshing=false,requestGen=0;
-const today=()=>new Date().toLocaleDateString('en-CA');
+// Attendance dates are stored in Asia/Taipei by the database, regardless
+// of the teacher's browser timezone or locale formatting.
+const today=()=>{
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
+ const byType=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+ return `${byType.year}-${byType.month}-${byType.day}`;
+};
 const esc=escapeHtml;
 const byId=(xs,id)=>xs.find(x=>x.id===id);
 const isOnline=(s)=>s.last_seen && (Date.now()-new Date(s.last_seen).getTime())<120000;
@@ -105,6 +111,7 @@ async function refreshLiveOnly(){
      votes=votes.filter(v=>v.question_id!==active.id).concat(latestVotes);
    }
    renderOverview();renderLive();renderStudents();
+   if(tab==='reports')renderReports();
    if(active?.id!==voteChannel?.__questionId) await resetSubscriptions();
  }catch(e){console.error('增量同步失敗',e);}
 }
@@ -204,17 +211,28 @@ async function bulkImport(){
  if(!parsed.length)return toast('請輸入至少一位學生',true);
  if(parsed.length>200)return toast('每次最多建立 200 位學生',true);
  const b=$('bulkImport');setBusy(b,true,'正在建立學生…');let success=0,failed=[];
- for(const row of parsed){
-   const split=row.split(',');const no=split.shift()?.trim(),name=split.join(',').trim();
-   if(!no||!name){failed.push(row+'（格式不正確）');continue;}
-   try{const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});
-     if(result?.[0]){codes.push({教室代碼:room.code,學號:no,姓名:name,個人入班碼:result[0].access_code});success++;}}
-   catch(e){failed.push(`${no}：${e.message}`);}
+ try{
+   for(const row of parsed){
+     const split=row.split(',');const no=split.shift()?.trim(),name=split.join(',').trim();
+     if(!no||!name){failed.push({row,reason:'格式不正確'});continue;}
+     try{
+       const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});
+       if(!result?.[0])throw Error('伺服器未回傳入班碼');
+       codes.push({教室代碼:room.code,學號:no,姓名:name,個人入班碼:result[0].access_code});
+       success++;
+     }catch(e){failed.push({row,reason:e.message});}
+   }
+   renderCodes();
+   // Keep original failed rows so teachers can correct and retry without losing names.
+   $('bulkRoster').value=failed.map(x=>x.row).join('\n');
+   await refreshRoom();
+   toast(`批次新增完成：成功 ${success} 人、失敗 ${failed.length} 人`,failed.length>0);
+   if(failed.length)console.warn('批次新增失敗',failed.map(x=>`${x.row}：${x.reason}`));
+ }catch(e){
+   failure(e,'同步學生名冊失敗；已建立的入班碼仍保留在畫面上');
+ }finally{
+   setBusy(b,false);
  }
- renderCodes();$('bulkRoster').value=failed.map(x=>x.split('：')[0]).join('\n');
- await refreshRoom();setBusy(b,false);
- toast(`批次新增完成：成功 ${success} 人、失敗 ${failed.length} 人` ,failed.length>0);
- if(failed.length)console.warn('批次新增失敗',failed);
 }
 async function createStudent(ev){ev.preventDefault();if(!roomId)return toast('請先選擇教室',true);const b=ev.submitter;setBusy(b,true);
  try{const no=$('studentNumber').value.trim(),name=$('studentName').value.trim();const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});const entry=result?.[0];if(!entry)throw Error('未取得新學生入班碼');
