@@ -1,7 +1,17 @@
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from './config.js';
 
-export const configured = SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR-PROJECT') &&
-  SUPABASE_PUBLISHABLE_KEY.startsWith('sb_publishable_') && !SUPABASE_PUBLISHABLE_KEY.includes('REPLACE_ME');
+// A placeholder key or a REST endpoint path must never be treated as
+// a working Supabase SDK configuration.
+const validProjectUrl = (() => {
+  try {
+    const url = new URL(SUPABASE_URL);
+    return url.protocol === 'https:' && !!url.hostname &&
+      url.pathname === '/' && !url.search && !url.hash &&
+      !url.hostname.includes('YOUR-PROJECT');
+  } catch { return false; }
+})();
+const validPublishableKey = /^sb_publishable_[A-Za-z0-9_-]{20,}$/.test(SUPABASE_PUBLISHABLE_KEY);
+export const configured = validProjectUrl && validPublishableKey;
 export const supaReady = () => typeof window.supabase?.createClient === 'function';
 export function client(role) {
   if (!configured || !supaReady()) return null;
