@@ -9,7 +9,7 @@ const teacherModules=[
  {id:'qna',label:'課堂提問',icon:'✉',src:'teacher.html?section=qna'},
  {id:'reports',label:'學習分析與報表',icon:'▥',src:'teacher.html?section=reports'},
  {id:'audit',label:'稽核與紀錄',icon:'◷',src:'teacher.html?section=audit'},
- {id:'access',label:'權限及備份管理',icon:'⚙',src:'admin.html'},
+ {id:'access',label:'權限及備份管理',icon:'⚙',src:'admin.html#backupArea'},
  {id:'ballots',label:'校園表決模組',icon:'◇',src:'ballots.html'}
 ];
 const studentModules=[
@@ -213,7 +213,30 @@ function wire(){
   if(role&&selected)selectModule(selected,{record:false});
  });
  $('retryModule').addEventListener('click',()=>selectModule(selected,{record:false}));
- $('moduleFrame').addEventListener('load',()=>show('moduleFallback',false));
+ $('moduleFrame').addEventListener('load',()=>{
+  show('moduleFallback',false);
+  // Same-origin module cards should switch the parent menu instead of
+  // silently replacing a child iframe while the parent breadcrumb stays stale.
+  try{
+   $('moduleFrame').contentDocument?.addEventListener('click',event=>{
+    const anchor=event.target?.closest?.('a[href]');
+    if(!anchor||event.defaultPrevented||event.ctrlKey||event.metaKey||event.shiftKey||event.altKey)return;
+    const url=new URL(anchor.href,location.href);
+    if(url.origin!==location.origin)return;
+    const file=url.pathname.split('/').pop();
+    let destination=null;
+    if(role==='teacher'){
+     if(file==='teacher.html')destination=anchor.textContent.includes('課堂互動')?'live':'rooms';
+     if(file==='ballots.html')destination='ballots';
+     if(file==='admin.html')destination='overview';
+    }else if(role==='student'){
+     if(file==='student.html')destination='classroom';
+     if(file==='vote.html')destination='governance';
+    }
+    if(destination){event.preventDefault();selectModule(destination);}
+   },{capture:true});
+  }catch(e){console.warn('模組內部導覽同步失敗',e);}
+ });
  window.addEventListener('popstate',()=>{
   if(role)selectModule(parseRequestedModule(),{record:false});
  });
