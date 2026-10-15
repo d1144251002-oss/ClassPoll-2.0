@@ -1,0 +1,27 @@
+name: ClassPoll quality checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate JavaScript syntax
+        run: |
+          node --check js/config.js
+          node --check js/common.js
+          node --check js/student.js
+          node --check js/teacher.js
+      - name: Validate pages, imports, config, SQL and RLS
+        run: node scripts/check-static.mjs
