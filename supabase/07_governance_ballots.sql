@@ -118,6 +118,9 @@ BEGIN
  ON CONFLICT DO NOTHING;
  GET DIAGNOSTICS v_n=ROW_COUNT;
  IF v_n=0 THEN RAISE EXCEPTION '沒有符合資格的學生，請先建立學生名冊'; END IF;
+ IF v_n<v_b.min_report_votes THEN
+   RAISE EXCEPTION '目前名冊僅有 % 人，低於結果公開門檻 % 票。請先增加學生或編輯草稿的公開門檻。',v_n,v_b.min_report_votes;
+ END IF;
  UPDATE public.cp2_ballots SET eligible_count=v_n,status='active',activated_at=clock_timestamp() WHERE id=p_ballot;
  INSERT INTO public.cp2_audit(room_id,actor_uid,event,details)
  VALUES(v_b.room_id,auth.uid(),'ballot.activate',jsonb_build_object('ballot_id',p_ballot,'eligible',v_n));
