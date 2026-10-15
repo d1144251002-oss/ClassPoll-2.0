@@ -158,7 +158,7 @@ BEGIN
  IF v_uid IS NULL OR NOT EXISTS(SELECT 1 FROM public.cp2_teachers WHERE user_id=v_uid)
    OR coalesce(auth.jwt()->>'is_anonymous','false')='true' THEN
    RAISE EXCEPTION '沒有教室還原權限' USING errcode='42501'; END IF;
- IF p_backup IS NULL OR pg_column_size(p_backup)>5000000 THEN
+ IF p_backup IS NULL OR octet_length(p_backup::text)>5000000 THEN
   RAISE EXCEPTION '備份資料不可超過 5 MB'; END IF;
  IF p_backup->>'format'<>'classpoll-room-backup-v1' THEN RAISE EXCEPTION '備份格式或版本不支援'; END IF;
  v_s:=p_backup->'students';
