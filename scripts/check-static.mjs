@@ -11,7 +11,7 @@ const present = (file) => fs.existsSync(file) && fs.statSync(file).isFile();
 const required = [
   'index.html', 'teacher.html', 'student.html', 'ballots.html', 'vote.html', 'admin.html',
   'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js', 'js/ballots.js', 'js/vote.js', 'js/platform.js', 'js/platform-utils.js',
-  'assets/style.css', 'assets/ballots.css', 'assets/platform.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql', 'supabase/09_platform_core.sql',
+  'assets/style.css', 'assets/ballots.css', 'assets/platform.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql', 'supabase/09_platform_core.sql', 'supabase/10_classroom_qna.sql',
   'supabase/02_grant_teacher.sql', 'supabase/03_fix_rooms_rls.sql',
   'supabase/04_performance_indexes.sql',
   'supabase/05_fix_vote_deadline.sql', 'supabase/08_ballot_draft_update.sql'
@@ -89,3 +89,12 @@ assert(platformSchema.includes('cp2_room_restore_roster'), 'Safe room restoratio
 assert(read('js/platform-utils.js').includes("AES-GCM"), 'Encrypted exports are required');
 assert(read('admin.html').includes('restoreFile'), 'Restore UI must exist');
 console.log('Platform access, backup and role policy static checks passed.');
+
+const qna=read('supabase/10_classroom_qna.sql');
+assert(qna.includes('ENABLE ROW LEVEL SECURITY'), 'Q&A must have RLS');
+assert(qna.includes('REVOKE ALL ON public.cp2_inquiries'), 'Q&A must forbid direct access');
+assert(qna.includes('cp2_qna_post') && qna.includes('cp2_qna_reply'), 'Q&A posting and reply RPCs required');
+assert(qna.includes("interval '1 hour'"), 'Q&A posting rate limit required');
+assert(read('student.html').includes('qnaForm'), 'Student Q&A form missing');
+assert(read('teacher.html').includes('tab-qna'), 'Teacher Q&A panel missing');
+console.log('Classroom Q&A static controls passed.');
