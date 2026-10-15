@@ -47,3 +47,22 @@ test('student can join and ask a private classroom question',async({page})=>{
  await expect(page.locator('#toasts')).toContainText('問題已送給教師');
  await expect(page.locator('#qnaText')).toHaveValue('');
 });
+
+test('teacher can calculate and export a graded CSV report',async({page})=>{
+ await mockSupabase(page);await page.goto('/teacher.html');
+ await expect(page.locator('#teacherApp')).toBeVisible();
+ await page.locator('button[data-tab="reports"]').click();
+ await expect(page.locator('#scoreRows')).toContainText('王同學');
+ await expect(page.locator('#scoreRows')).toContainText('5');
+ const nextDownload=page.waitForEvent('download');
+ await page.locator('#exportScores').click();
+ const download=await nextDownload;
+ expect(download.suggestedFilename()).toMatch(/\.csv$/);
+});
+test('mobile platform dashboard stays within the viewport',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await mockSupabase(page);await page.goto('/admin.html');
+ await expect(page.locator('#roomTotal')).toHaveText('2');
+ const width=await page.evaluate(()=>document.documentElement.scrollWidth);
+ expect(width).toBeLessThanOrEqual(392);
+});
