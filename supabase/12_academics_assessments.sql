@@ -117,6 +117,27 @@ BEGIN
  INSERT INTO public.cp2_audit(room_id,actor_uid,event,details)
  VALUES(v_room,auth.uid(),'course.attendance',jsonb_build_object('session_id',p_session,'student_id',p_student,'present',p_present));
 END $;
+CREATE OR REPLACE FUNCTION private.cp3_course_roster(p_course uuid)
+RETURNS TABLE(id uuid,student_no text,display_name text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $
+BEGIN
+ IF NOT private.cp3_can_edit_course(p_course) THEN RAISE EXCEPTION '沒有課程名冊權限' USING errcode='42501'; END IF;
+ RETURN QUERY SELECT st.id,st.student_no,st.display_name FROM public.cp3_enrollments e
+ JOIN public.cp2_students st ON st.id=e.student_id
+ WHERE e.course_id=p_course AND e.is_active AND st.is_active ORDER BY st.student_no;
+END $;
+CREATE OR REPLACE FUNCTION private.cp3_course_question_candidates(p_course uuid)
+RETURNS TABLE(id uuid,prompt text,linked boolean)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $
+DECLARE v_room uuid;
+BEGIN
+ IF NOT private.cp3_can_edit_course(p_course) THEN RAISE EXCEPTION '沒有試題管理權限' USING errcode='42501'; END IF;
+ SELECT room_id INTO v_room FROM public.cp3_courses WHERE id=p_course;
+ RETURN QUERY SELECT q.id,q.prompt,
+ EXISTS(SELECT 1 FROM public.cp3_course_questions link WHERE link.question_id=q.id AND link.course_id=p_course)
+ FROM public.cp2_questions q WHERE q.room_id=v_room AND q.status='closed'
+ ORDER BY q.created_at DESC LIMIT 100;
+END $;
 CREATE OR REPLACE FUNCTION private.cp3_course_question_link(p_course uuid,p_question uuid)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
 DECLARE v_room uuid;v_question_room uuid;
@@ -329,6 +350,14 @@ LANGUAGE sql SECURITY INVOKER SET search_path='' AS $ SELECT * FROM private.cp3_
 CREATE OR REPLACE FUNCTION public.cp3_attendance_set(p_session uuid,p_student uuid,p_present boolean)
 RETURNS void LANGUAGE sql SECURITY INVOKER SET search_path='' AS $
  SELECT private.cp3_attendance_set(p_session,p_student,p_present); $;
+CREATE OR REPLACE FUNCTION public.cp3_course_roster(p_course uuid)
+RETURNS TABLE(id uuid,student_no text,display_name text)
+LANGUAGE sql SECURITY INVOKER SET search_path='' AS $
+ SELECT * FROM private.cp3_course_roster(p_course); $;
+CREATE OR REPLACE FUNCTION public.cp3_course_question_candidates(p_course uuid)
+RETURNS TABLE(id uuid,prompt text,linked boolean)
+LANGUAGE sql SECURITY INVOKER SET search_path='' AS $
+ SELECT * FROM private.cp3_course_question_candidates(p_course); $;
 CREATE OR REPLACE FUNCTION public.cp3_course_question_link(p_course uuid,p_question uuid)
 RETURNS void LANGUAGE sql SECURITY INVOKER SET search_path='' AS $
  SELECT private.cp3_course_question_link(p_course,p_question); $;
@@ -362,7 +391,8 @@ DO $$DECLARE f record;BEGIN
  WHERE n.nspname IN('private','public') AND p.proname IN (
  'cp3_session_save','cp3_assignment_save','cp3_assignment_list','cp3_assignment_submit',
  'cp3_submission_list','cp3_grade_review','cp3_weights_set','cp3_gradebook',
- 'cp3_sessions_list','cp3_attendance_set','cp3_course_question_link') LOOP
+ 'cp3_sessions_list','cp3_attendance_set','cp3_course_question_link',
+ 'cp3_course_roster','cp3_course_question_candidates') LOOP
   EXECUTE 'REVOKE ALL ON FUNCTION '||f.signature||' FROM PUBLIC,anon';
   EXECUTE 'GRANT EXECUTE ON FUNCTION '||f.signature||' TO authenticated';
  END LOOP;
