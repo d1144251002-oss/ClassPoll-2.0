@@ -7,7 +7,7 @@ assert.deepEqual(parseRosterCSV('\uFEFF學號,姓名\r\nD1,"王,小明"\r\nD2,�
 assert.deepEqual(parseRosterCSV('D1,王同學\nD2,"陳\n同學"'),[
  {student_no:'D1',display_name:'王同學'},{student_no:'D2',display_name:'陳\n同學'}
 ]);
-assert.throws(()=>parseRosterCSV('D1,A\nD1,B'),/重複學號/);
+assert.throws(()=>parseRosterCSV('D1,A\nD1,B'),/學號重複/);
 assert.throws(()=>parseRosterCSV('D1,A,B'),/格式不正確/);
 assert.throws(()=>parseRosterCSV('"bad,D1'),/引號未關閉/);
 assert.throws(()=>parseRosterCSV(''),/至少輸入/);
