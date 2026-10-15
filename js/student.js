@@ -30,13 +30,22 @@ async function init(){
  if(!guardConfig())return;db=client('student');if(!db)return;
  setErrorReporter(db,'student',()=>member?.room_id||null);
  try{
-   setStatus('驗證學生身分中',false);await ensureAnonymous();
+   // Avoid creating anonymous accounts for every visitor before they submit
+   // a valid class code; an existing session can still resume automatically.
+   const {data,error}=await db.auth.getSession();
+   if(error)throw error;
    const lastRoom=localStorage.getItem(storage);
-   if(lastRoom){
-     try{const resumed=await rpc(db,'cp2_resume',{p_room:lastRoom});if(resumed?.length)await connected(resumed[0]);else localStorage.removeItem(storage);}
-     catch(e){console.warn('自動恢復失敗',e);localStorage.removeItem(storage);}
+   if(lastRoom && data.session?.user?.is_anonymous){
+     authId=data.session.user.id;
+     try{
+       const resumed=await rpc(db,'cp2_resume',{p_room:lastRoom});
+       if(resumed?.length)await connected(resumed[0]);
+       else localStorage.removeItem(storage);
+     }catch(e){console.warn('自動恢復失敗',e);localStorage.removeItem(storage);}
+   }else if(lastRoom){
+     localStorage.removeItem(storage);
    }
- }catch(e){failure(e,'學生端初始化失敗，請在 Supabase 啟用 Anonymous Sign-ins');}
+ }catch(e){failure(e,'學生端初始化失敗');}
 }
 async function join(ev){
  ev.preventDefault();if(!db)return toast('請先完成 Supabase 設定',true);
