@@ -124,6 +124,13 @@ async function restoreExisting(){
  const [a,b]=await Promise.all([teacherDB.auth.getSession(),studentDB.auth.getSession()]);
  if(a.error)console.warn('教師會話讀取失敗',a.error);
  if(b.error)console.warn('學生會話讀取失敗',b.error);
+ // Explicit classroom invitations always take precedence over an existing
+ // staff session in the same browser. Do not silently sign students into staff UI.
+ const invite=new URLSearchParams(location.search).get('room');
+ if(invite && /^[A-Za-z0-9]{4,12}$/.test(invite)){
+  if(b.data?.session && await verifyStudentSession(b.data.session))return;
+  selectRole('student');return;
+ }
  if(a.data?.session && await verifyTeacherSession(a.data.session))return;
  if(b.data?.session && await verifyStudentSession(b.data.session))return;
 }
