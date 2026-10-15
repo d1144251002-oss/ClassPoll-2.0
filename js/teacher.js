@@ -156,8 +156,9 @@ function renderRooms(){
 function renderOverview(){
  txt('mRooms',rooms.length);txt('mStudents',students.filter(s=>s.is_active).length);
  txt('mAttendance',attendance.filter(a=>a.attended_on===today()).length);
- const liveVotes=active?participantVotes(active.id):[];
- const activeStudents=students.filter(s=>s.is_active).length;
+ const eligible=new Set(students.filter(s=>s.is_active).map(s=>s.id));
+ const liveVotes=active?participantVotes(active.id).filter(v=>eligible.has(v.student_id)):[];
+ const activeStudents=eligible.size;
  txt('mRate',active&&activeStudents>0?Math.round(liveVotes.length/activeStudents*100)+'%':'—');
  txt('mRateSub',active?`${liveVotes.length} 位學生已作答`:'等待題目發布');
  txt('overviewQuestion',active?.prompt||'目前沒有正在作答的題目');
@@ -188,7 +189,9 @@ function renderLive(){
  txt('liveBadge',active?'● 進行中':'● 尚無題目');
  const opts=active?asOptions(active.options):[];
  const tally=active?optionCounts(active.id,opts.length):[];
- txt('currentProgress',active?`已作答 ${participantVotes(active.id).length} / ${students.filter(s=>s.is_active).length} 人`:'尚無進行中的作答');
+ const eligible=new Set(students.filter(s=>s.is_active).map(s=>s.id));
+ const eligibleVotes=active?participantVotes(active.id).filter(v=>eligible.has(v.student_id)).length:0;
+ txt('currentProgress',active?`已作答 ${eligibleVotes} / ${eligible.size} 人`:'尚無進行中的作答');
  txt('currentDeadline',active?.ends_at?'本題截止：'+fmtDate(active.ends_at):'本題無倒數限制');
  $('closeBtn').disabled=!active;
  chartPoll=barChart(chartPoll,'pollChart',opts,tally);
