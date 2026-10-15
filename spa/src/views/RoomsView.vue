@@ -29,9 +29,10 @@ async function createStudent(){
   if(e)throw e;
   const record=Array.isArray(data)?data[0]:null;
   if(!record?.access_code)throw Error('伺服器未返回新入班碼；請先刷新名冊避免重複新增');
-  lastCode.value={name,number,secret:String(record.access_code)};
-  studentNumber.value='';studentName.value='';message.value='學生已新增，請立即將個人入班碼安全交付本人';
+  const secret=String(record.access_code);
   await loadStudents(selected.value);
+  lastCode.value={name,number,secret};
+  studentNumber.value='';studentName.value='';message.value='學生已新增，請立即將個人入班碼安全交付本人';
  }catch(e){error.value=e instanceof Error?e.message:'新增學生失敗';}
  finally{busy.value=false;}
 }
