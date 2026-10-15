@@ -287,7 +287,7 @@ begin
  if auth.uid() is null or coalesce(auth.jwt()->>'is_anonymous','false') <> 'true' then
    raise exception '學生身分驗證失敗' using errcode='42501'; end if;
  select * into v_q from public.cp2_questions where id=p_question for share;
- if not found or v_q.status <> 'published' or (v_q.ends_at is not null and now()>=v_q.ends_at) then
+ if not found or v_q.status <> 'published' or (v_q.ends_at is not null and clock_timestamp()>=v_q.ends_at) then
    raise exception '題目已結束或不存在'; end if;
  if not exists(select 1 from public.cp2_rooms r where r.id=v_q.room_id and r.is_active) then
    raise exception '教室已停用'; end if;
