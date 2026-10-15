@@ -58,7 +58,7 @@ function clearPrivateState(){
  requestGen++;renderCodes();$('password').value='';
  for(const chart of [chartLive,chartPoll,chartAccuracy])try{chart?.destroy();}catch(e){console.warn('清除統計圖表失敗',e);}
  chartLive=null;chartPoll=null;chartAccuracy=null;
- renderAll();authUI();
+ renderAll();renderQna();authUI();
 }
 async function onLogout(){
  if(!db)return;
