@@ -1,6 +1,18 @@
 # ClassPoll 2.0 — 大學課堂即時投票／測驗平台
 
-> 2026-10-14 製作的**可部署原始碼**。採用純 HTML/CSS/ES Modules + Supabase，不需要 npm / Node.js / 自架伺服器，適合部署到 GitHub Pages。**並未直接修改原始 GitHub 儲存庫，也尚未在真實 Supabase 上完成端對端驗收。**
+> 使用純 HTML/CSS/ES Modules + Supabase，部署於 GitHub Pages。此儲存庫已連接 Supabase 並進行資料庫層交易回滾測試及 GitHub Actions 檢查；**尚未完成完整的真實瀏覽器多角色端到端驗收或獨立資安認證**。
+
+## 正式表決模組（2026-10）
+
+ClassPoll 2.0 額外提供適合班級、社團與校園組織的**正式表決模組**，與原本課堂測驗功能分開：
+
+- [表決管理員入口](ballots.html) — 建立、編輯草稿，啟用時凍結資格名冊，單選／複選／表決制，自訂時程與最低公開票數，結束後匯出彙總結果。
+- [學生正式投票入口](vote.html) — 使用現有學生名冊驗證，提交一次不可更改的選票並取得收件憑證。
+- [安全架構、部署、操作及限制](GOVERNANCE_BALLOTS.md) — 說明 RLS、RPC、角色隔離、非密碼學秘密票，以及不適用於政府公職選舉的限制。
+
+既有專案新增正式表決功能應執行 `supabase/07_governance_ballots.sql` 及 `supabase/08_ballot_draft_update.sql`。原本 `01_install.sql` 為課堂測驗基礎安裝，兩套表決資料表彼此獨立。
+
+**本模組不能宣稱「零 BUG」或政府選務認證。** 敏感正式選舉仍需校方 SSO、多因子驗證、獨立程式碼審查、滲透測試與密碼學選票驗證能力。
 
 ## 你要找的 Supabase API 位置
 
