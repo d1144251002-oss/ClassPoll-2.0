@@ -1,0 +1,69 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0d2343"><title>ClassPoll 2.0｜平台管理中心</title>
+<link rel="stylesheet" href="assets/platform.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module" src="js/platform.js"></script></head>
+<body><header class="topbar"><a href="index.html" class="brand">◈ <strong>ClassPoll 2.0</strong><span>工作平台</span></a>
+<nav aria-label="頂端導覽"><a href="teacher.html">教學管理</a><a href="student.html">學生入口</a><a href="ballots.html">正式表決模組</a></nav></header>
+<main class="main"><div class="hero"><div><p class="eyebrow">CLASSROOM OPERATIONS CENTER</p>
+<h1>整體管理後台</h1><p>教室資產、協作角色、出席統計、資料匯出、權限稽核及備份還原。</p></div>
+<span class="hero-tag">正式功能開發分支 · 驗收版</span></div>
+<div id="configNotice" class="alert hidden">Supabase 設定不完整，請聯繫平台管理員。</div>
+<div id="errorBox" class="alert hidden" role="alert"></div>
+<section id="loginGate" class="card login"><h2>登入管理中心</h2><p>沿用現有教師白名單；教室助理與稽核員僅擁有經授權的唯讀能力。</p>
+<form id="loginForm" class="form"><label>教師電子郵件<input id="email" type="email" required autocomplete="username"></label>
+<label>密碼<input id="password" type="password" required autocomplete="current-password"></label>
+<button id="loginButton" class="primary" type="submit">登入管理中心</button></form></section>
+<section id="workspace" class="hidden">
+<div class="toolbar"><div><strong id="identity">—</strong><p id="roleSummary">—</p></div>
+<div class="actions"><button id="refreshButton" type="button" class="secondary">重新同步</button>
+<button id="logoutButton" type="button" class="secondary">登出</button></div></div>
+<div class="stats">
+<article class="stat"><span>可檢視教室</span><strong id="roomTotal">0</strong><small>擁有與被授權</small></article>
+<article class="stat"><span>有效學生</span><strong id="studentTotal">0</strong><small>各教室合計</small></article>
+<article class="stat"><span>今日出席</span><strong id="presentTotal">0</strong><small>台灣日期</small></article>
+<article class="stat"><span>近 24 小時錯誤</span><strong id="errorTotal">0</strong><small>監控摘要</small></article></div>
+<div class="section-heading"><div><p class="eyebrow">MODULES</p><h2>常用工作模組</h2></div></div>
+<div class="modules">
+<a href="teacher.html" class="module"><span class="module-icon">▤</span><b>教室與學生</b><p>學生名冊、出席、批次匯入</p></a>
+<a href="teacher.html" class="module"><span class="module-icon">◉</span><b>課堂互動</b><p>即時測驗、題庫、教學分析</p></a>
+<a href="#backupArea" class="module"><span class="module-icon">▥</span><b>資料及備份</b><p>加密匯出、教室復原與重新發碼</p></a>
+<a href="ballots.html" class="module"><span class="module-icon">◇</span><b>正式投票</b><p>獨立表決模組（維持既有版本）</p></a>
+</div>
+<section class="card section"><div class="section-heading"><div><p class="eyebrow">CLASSROOM REGISTER</p><h2>教室管理總覽</h2></div>
+<input id="roomSearch" type="search" aria-label="搜尋教室" placeholder="搜尋教室名稱或代碼"></div>
+<div class="table-wrap"><table><thead><tr><th>教室</th><th>權限</th><th>學生</th><th>今日出席</th><th>題數</th><th>作答</th><th>監控</th></tr></thead><tbody id="roomRows"><tr><td colspan="7">請先登入。</td></tr></tbody></table></div></section>
+<div class="split">
+<section class="card section"><div class="section-heading"><div><p class="eyebrow">ACCESS CONTROL</p><h2>角色與權限</h2></div></div>
+<p class="note">教室擁有者可將已存在的教師帳號授權為 <b>協作助理</b> 或 <b>唯讀稽核員</b>；兩者不具備建立教室、修改名冊或公布題目的寫入權限。</p>
+<label>選擇你擁有的教室<select id="roleRoom"></select></label>
+<div id="roleList" class="item-list"></div>
+<form id="roleForm" class="form"><label>受授權教師 Email<input id="roleEmail" type="email" required placeholder="teacher@school.edu"></label>
+<label>授權動作<select id="roleType"><option value="assistant">協作助理（唯讀）</option><option value="auditor">稽核員（唯讀）</option><option value="remove">撤銷權限</option></select></label>
+<button id="saveRole" type="submit" class="primary">執行權限變更</button></form></section>
+<section class="card section"><div class="section-heading"><div><p class="eyebrow">AUDIT TRAIL</p><h2>操作紀錄</h2></div></div>
+<label>選擇可檢視教室<select id="auditRoom"></select></label>
+<div id="auditRows" class="item-list"><p class="muted">請選取教室。</p></div></section></div>
+<section class="card section" id="backupArea"><div class="section-heading"><div><p class="eyebrow">DATA PROTECTION</p><h2>資料備份與恢復</h2></div></div>
+<p class="note">完整歷史快照包括名冊、出席、題目、答案與課堂測驗紀錄，匯出前於瀏覽器使用 <b>AES-256-GCM</b> 加密，伺服器不會知道你的備份密碼。介面還原只建立**新教室與新名冊**，不匯入舊投票或成績，不會覆寫正式歷史紀錄。</p>
+<div class="split"><div>
+<h3>加密備份</h3><div class="form"><label>備份來源教室<select id="backupRoom"></select></label>
+<label>備份密碼（至少 12 個字元）<input id="backupPassword" type="password" autocomplete="new-password" minlength="12"></label>
+<label>確認備份密碼<input id="backupConfirm" type="password" autocomplete="new-password" minlength="12"></label>
+<button id="downloadBackup" type="button" class="primary">加密匯出教室快照</button></div></div>
+<div><h3>建立還原教室（不影響舊資料）</h3><div class="form">
+<label>加密備份檔案<input id="restoreFile" type="file" accept=".json,application/json"></label>
+<label>備份密碼<input id="restorePassword" type="password" autocomplete="off"></label>
+<label>新教室代碼<input id="restoreCode" type="text" pattern="[A-Z0-9]{4,12}" maxlength="12" placeholder="RESTORE01"></label>
+<label>新教室名稱<input id="restoreTitle" type="text" maxlength="100" placeholder="還原後的測試班"></label>
+<button id="restoreButton" class="secondary" type="button">驗證密碼並建立新名冊</button>
+</div></div></div>
+<div id="restoreCodesPanel" class="hidden"><h3>新入班碼（請立即保存）</h3>
+<p class="note">系統只會在還原完成時提供新碼，請立即匯出並安全交付學生。舊碼不會被還原。</p>
+<div class="table-wrap"><table><thead><tr><th>學號</th><th>姓名</th><th>新入班碼</th></tr></thead><tbody id="restoreCodes"></tbody></table></div>
+<button id="exportRestoreCodes" type="button" class="secondary">匯出新入班碼</button></div>
+<p class="note">整個 Supabase 資料庫的災難復原、時間點還原與異地備援應由管理員透過 Supabase 官方備份方案實施；本功能不可取代資料庫層災難復原。</p>
+</section>
+<footer>ClassPoll 2.0 · 最小權限與加密備份 · 所有上線操作須通過驗收後才可合併</footer>
+</section></main><div id="toasts" role="status" aria-live="polite" class="toasts"></div></body></html>
