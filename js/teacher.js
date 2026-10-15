@@ -43,8 +43,22 @@ async function verifyTeacher(){
 async function onLogin(ev){ev.preventDefault();if(!db)return;const b=$('loginBtn');setBusy(b,true);
  try{ const {error}=await db.auth.signInWithPassword({email:$('email').value.trim(),password:$('password').value});if(error)throw error;
  await verifyTeacher();if(authorized)toast('已登入教師控制台');
- }catch(e){failure(e,'登入失敗');}finally{setBusy(b,false);}}
-async function onLogout(){if(!db)return;try{await db.auth.signOut();authorized=false;user=null;roomId='';await clearChannels();authUI();toast('已登出');}catch(e){failure(e,'登出失敗');}}
+ }catch(e){failure(e,'登入失敗');}finally{$('password').value='';setBusy(b,false);}}
+function clearPrivateState(){
+ authorized=false;user=null;roomId='';room=null;active=null;
+ rooms=[];students=[];attendance=[];bank=[];questions=[];keys=[];votes=[];audit=[];errors=[];codes=[];
+ requestGen++;renderCodes();$('password').value='';
+ authUI();
+}
+async function onLogout(){
+ if(!db)return;
+ try{
+   await db.auth.signOut();
+   clearPrivateState();
+   await clearChannels();
+   toast('已登出');
+ }catch(e){failure(e,'登出失敗');}
+}
 async function getAll(table, filter=null,sort=null){
  const list=[];for(let offset=0;offset<25000;offset+=500){
    let q=db.from(table).select('*').range(offset,offset+499);
@@ -314,7 +328,13 @@ window.addEventListener('load',async()=>{
  wire();if(!guardConfig())return;db=client('teacher');if(!db)return;
  setErrorReporter(db,'teacher',()=>roomId);
  try{await verifyTeacher();
- db.auth.onAuthStateChange((event)=>{if(event==='SIGNED_OUT'){authorized=false;user=null;authUI();} });
+ db.auth.onAuthStateChange((event)=>{
+   if(event==='SIGNED_OUT'){
+     clearPrivateState();
+     // Auth callback should not block the SDK session transition.
+     setTimeout(()=>{void clearChannels();},0);
+   }
+ });
  interval=setInterval(()=>{tick();if(authorized&&!document.hidden)refreshLiveOnly();},20000);setInterval(tick,1000);tick();
  }catch(e){failure(e,'初始化失敗');}
 });
