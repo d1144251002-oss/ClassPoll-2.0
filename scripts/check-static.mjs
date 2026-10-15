@@ -9,15 +9,15 @@ function assert(condition, message) {
 const read = (file) => fs.readFileSync(file, 'utf8');
 const present = (file) => fs.existsSync(file) && fs.statSync(file).isFile();
 const required = [
-  'index.html', 'teacher.html', 'student.html', 'ballots.html', 'vote.html',
-  'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js', 'js/ballots.js', 'js/vote.js',
-  'assets/style.css', 'assets/ballots.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql',
+  'index.html', 'teacher.html', 'student.html', 'ballots.html', 'vote.html', 'admin.html',
+  'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js', 'js/ballots.js', 'js/vote.js', 'js/platform.js', 'js/platform-utils.js',
+  'assets/style.css', 'assets/ballots.css', 'assets/platform.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql', 'supabase/09_platform_core.sql',
   'supabase/02_grant_teacher.sql', 'supabase/03_fix_rooms_rls.sql',
   'supabase/04_performance_indexes.sql',
   'supabase/05_fix_vote_deadline.sql', 'supabase/08_ballot_draft_update.sql'
 ];
 for (const file of required) assert(present(file), 'Missing required file: ' + file);
-for (const pageName of ['index', 'teacher', 'student', 'ballots', 'vote']) {
+for (const pageName of ['index', 'teacher', 'student', 'ballots', 'vote', 'admin']) {
   const html = read(pageName + '.html');
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert(new Set(ids).size === ids.length, 'Duplicate HTML id in ' + pageName);
@@ -28,7 +28,7 @@ for (const pageName of ['index', 'teacher', 'student', 'ballots', 'vote']) {
   }
   assert(html.includes('charset="utf-8"'), 'Missing UTF-8 in ' + pageName);
 }
-for (const pageName of ['teacher', 'student', 'ballots', 'vote']) {
+for (const pageName of ['teacher', 'student', 'ballots', 'vote', 'admin']) {
   const html = read(pageName + '.html');
   const script = read('js/' + pageName + '.js');
   const common = read('js/common.js');
@@ -41,7 +41,7 @@ for (const pageName of ['teacher', 'student', 'ballots', 'vote']) {
   assert(html.includes('src="js/' + pageName + '.js"'), 'Missing module in ' + pageName);
   assert(html.includes('@supabase/supabase-js@2'), 'Missing Supabase SDK in ' + pageName);
 }
-for (const name of ['common', 'teacher', 'student', 'ballots', 'vote']) {
+for (const name of ['common', 'teacher', 'student', 'ballots', 'vote', 'admin', 'platform', 'platform-utils']) {
   for (const match of read('js/' + name + '.js').matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
     const filename = path.normalize(path.join('js', match[1]));
     assert(present(filename), 'Unresolved import in ' + name + ': ' + match[1]);
@@ -77,3 +77,14 @@ assert(governance.includes('min_report_votes'), 'Privacy threshold required');
 assert(governance.includes('v_n<v_b.min_report_votes'), 'Activation must reject impossible reporting thresholds');
 assert(read('supabase/08_ballot_draft_update.sql').includes("v_b.status<>'draft'"), 'Activated ballot choices must remain immutable');
 console.log('ClassPoll ballot policy static checks passed.');
+
+const platformSchema=read('supabase/09_platform_core.sql');
+assert(platformSchema.includes('ENABLE ROW LEVEL SECURITY'), 'Room role RLS is required');
+assert(platformSchema.includes('REVOKE ALL ON public.cp2_room_roles'), 'Room roles must not be directly exposed');
+assert(platformSchema.includes('private.cp2_owns(p_room)'), 'Scope writes to room owners');
+assert(platformSchema.includes('cp2_roster_import'), 'Atomic import RPC is required');
+assert(platformSchema.includes('cp2_room_snapshot'), 'Private backup snapshot is required');
+assert(platformSchema.includes('cp2_room_restore_roster'), 'Safe room restoration RPC is required');
+assert(read('js/platform-utils.js').includes("AES-GCM"), 'Encrypted exports are required');
+assert(read('admin.html').includes('restoreFile'), 'Restore UI must exist');
+console.log('Platform access, backup and role policy static checks passed.');
