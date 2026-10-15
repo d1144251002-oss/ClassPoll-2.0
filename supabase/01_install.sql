@@ -207,9 +207,9 @@ begin
  select * into v_r from public.cp2_rooms where code=upper(trim(p_code)) and is_active;
  if not found then raise exception '教室不存在或已關閉'; end if;
  select * into v_s from public.cp2_students s where s.room_id=v_r.id and s.student_no=trim(p_number) for update;
- if not found or not v_s.is_active then raise exception '學生不在名冊或帳號停用'; end if;
+ if not found or not v_s.is_active then raise exception '入班身分驗證失敗，請確認學號與個人入班碼'; end if;
  if v_s.access_hash <> encode(extensions.digest(coalesce(p_access,''),'sha256'),'hex') then
-   raise exception '個人入班碼錯誤'; end if;
+   raise exception '入班身分驗證失敗，請確認學號與個人入班碼'; end if;
  if v_s.auth_uid is not null and v_s.auth_uid <> v_uid then
    raise exception '此學號已綁定另一個裝置，請聯繫教師重設'; end if;
  update public.cp2_students set auth_uid=v_uid,joined_at=coalesce(joined_at,now()),last_seen=now() where id=v_s.id;
