@@ -47,6 +47,19 @@ export function setBusy(button, busy, label) {
   if (!button) return; if(!button.dataset.label) button.dataset.label=button.textContent;
   button.disabled=busy;button.textContent=busy?(label||'處理中…'):button.dataset.label;
 }
+// Attendance uses Taiwan calendar dates on the server; keep the UI independent
+// of each teacher's operating-system timezone and browser locale.
+export function taipeiToday(date=new Date()){
+ const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
+ const byType=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+ return `${byType.year}-${byType.month}-${byType.day}`;
+}
+export function activeParticipation(students,votes){
+ const eligible=new Set(students.filter(s=>s.is_active).map(s=>s.id));
+ const count=votes.filter(v=>eligible.has(v.student_id)).length;
+ const total=eligible.size;
+ return {count,total,percent:total?Math.min(100,Math.round(count/total*100)):null};
+}
 export const fmtDate=(v)=>v?new Date(v).toLocaleString('zh-TW',{hour12:false}):'—';
 export const timeLeft=(v)=> v? Math.max(0, Math.ceil((new Date(v).getTime()-Date.now())/1000)):null;
 export const asOptions = (x) => Array.isArray(x)? x : (typeof x==='string'? JSON.parse(x): []);
