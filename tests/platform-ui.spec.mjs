@@ -105,6 +105,9 @@ test('teacher campus login enters one shell and can switch classroom and managem
  await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/admin\.html/);
  const frame=page.frameLocator('#moduleFrame');
  await expect(frame.locator('#roomTotal')).toHaveText('2');
+ await frame.locator('a.module').filter({hasText:'教室與學生'}).click();
+ await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/teacher\.html\?section=rooms/);
+ await expect(page.locator('#currentModule')).toHaveText('教室管理');
  await page.locator('#moduleNav [data-module="bank"]').click();
  await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/teacher\.html\?section=bank/);
  await expect(frame.locator('#tab-bank')).toBeVisible();
