@@ -9,15 +9,15 @@ function assert(condition, message) {
 const read = (file) => fs.readFileSync(file, 'utf8');
 const present = (file) => fs.existsSync(file) && fs.statSync(file).isFile();
 const required = [
-  'index.html', 'teacher.html', 'student.html',
-  'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js',
-  'assets/style.css', 'supabase/01_install.sql',
+  'index.html', 'teacher.html', 'student.html', 'ballots.html', 'vote.html',
+  'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js', 'js/ballots.js', 'js/vote.js',
+  'assets/style.css', 'assets/ballots.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql',
   'supabase/02_grant_teacher.sql', 'supabase/03_fix_rooms_rls.sql',
   'supabase/04_performance_indexes.sql',
   'supabase/05_fix_vote_deadline.sql'
 ];
 for (const file of required) assert(present(file), 'Missing required file: ' + file);
-for (const pageName of ['index', 'teacher', 'student']) {
+for (const pageName of ['index', 'teacher', 'student', 'ballots', 'vote']) {
   const html = read(pageName + '.html');
   const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]);
   assert(new Set(ids).size === ids.length, 'Duplicate HTML id in ' + pageName);
@@ -28,7 +28,7 @@ for (const pageName of ['index', 'teacher', 'student']) {
   }
   assert(html.includes('charset="utf-8"'), 'Missing UTF-8 in ' + pageName);
 }
-for (const pageName of ['teacher', 'student']) {
+for (const pageName of ['teacher', 'student', 'ballots', 'vote']) {
   const html = read(pageName + '.html');
   const script = read('js/' + pageName + '.js');
   const common = read('js/common.js');
@@ -41,7 +41,7 @@ for (const pageName of ['teacher', 'student']) {
   assert(html.includes('src="js/' + pageName + '.js"'), 'Missing module in ' + pageName);
   assert(html.includes('@supabase/supabase-js@2'), 'Missing Supabase SDK in ' + pageName);
 }
-for (const name of ['common', 'teacher', 'student']) {
+for (const name of ['common', 'teacher', 'student', 'ballots', 'vote']) {
   for (const match of read('js/' + name + '.js').matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
     const filename = path.normalize(path.join('js', match[1]));
     assert(present(filename), 'Unresolved import in ' + name + ': ' + match[1]);
@@ -66,3 +66,12 @@ assert(schema.includes('clock_timestamp()>=v_q.ends_at'),
 assert(schema.includes('cp2_vote') && schema.includes('cp2_join'),
   'Student membership and vote RPCs are required');
 console.log('ClassPoll static checks passed: ' + checks + ' assertions.');
+
+const governance = read('supabase/07_governance_ballots.sql');
+assert(governance.includes('ENABLE ROW LEVEL SECURITY'), 'Governance tables must enable RLS');
+assert(governance.includes('PRIMARY KEY(ballot_id,student_id)'), 'Ballot participation requires one vote per voter');
+assert(governance.includes('FOR SHARE'), 'Ballot casting must coordinate concurrent closure');
+assert(governance.includes('clock_timestamp()'), 'Ballot time must be server enforced');
+assert(governance.includes('REVOKE ALL ON TABLE'), 'Ballot internals must not be directly accessible');
+assert(governance.includes('min_report_votes'), 'Privacy threshold required');
+console.log('ClassPoll ballot policy static checks passed.');
