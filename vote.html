@@ -1,0 +1,28 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0b6f74"><title>學生正式投票｜ClassPoll 2.0</title>
+<link rel="stylesheet" href="assets/ballots.css"><script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script type="module" src="js/vote.js"></script></head>
+<body class="gov-page gov-voter">
+<header class="gov-header"><a class="gov-brand" href="index.html"><span class="gov-emblem">C</span><span>ClassPoll <small>2.0</small></span></a><div class="gov-nav"><a href="student.html">課堂作答</a><span class="gov-pill">正式表決入口</span></div></header>
+<main class="gov-main">
+<div class="gov-banner"><div><span class="gov-eyebrow">VERIFIED BALLOT PORTAL</span><h1>安全參與每一項決議</h1>
+<p>個人入班碼驗證投票資格，每項表決限投一次。投出後僅提供收件憑證，不能重新查看或更改你的選擇。</p></div><span class="gov-shield">◆<small>ONE PERSON · ONE BALLOT</small></span></div>
+<div id="configNotice" class="gov-alert hidden">系統設定尚未完成，請聯繫投票管理員。</div>
+<div id="errorAlert" class="gov-alert hidden" role="alert"></div>
+<section id="joinGate" class="gov-card gov-auth">
+<h2>核對學生投票資格</h2><p class="gov-muted">請輸入管理員發放的教室代碼、學號與個人入班碼，切勿分享入班碼。</p>
+<form id="joinForm" class="gov-form">
+<label>教室代碼<input id="joinRoom" maxlength="12" required autocomplete="off" placeholder="例如：DATA01"></label>
+<label>學號<input id="joinNumber" maxlength="40" required autocomplete="off" placeholder="名冊上的學號"></label>
+<label>個人入班碼<input id="joinAccess" type="password" minlength="16" maxlength="64" required autocomplete="off" placeholder="管理員發放的代碼"></label>
+<button id="joinBtn" type="submit" class="gov-primary">驗證資格並入班</button></form>
+<p class="gov-note">同一名冊身分在不同裝置可能需要管理員重新核發入班碼；已提交的表決不會因此重新開放。</p></section>
+<section id="voterApp" class="hidden">
+<div class="gov-toolbar"><div><strong id="roomName">—</strong><p class="gov-muted" id="studentName">—</p></div>
+<button id="reloadBtn" class="gov-outline" type="button">同步表決</button><button id="leaveBtn" class="gov-outline" type="button">返回入口</button></div>
+<div class="gov-status-line" id="connStatus">正在確認表決狀態…</div>
+<div id="ballotCards" class="gov-vote-list"><p class="gov-muted">正在載入表決。</p></div>
+</section>
+<footer class="gov-footer">投票由伺服器檢查資格及截止時間 · 收件憑證僅證明提交，不能證明你的選擇 · 非公職選舉系統</footer>
+</main><div id="toasts" class="gov-toasts" role="status" aria-live="polite"></div>
+</body></html>
