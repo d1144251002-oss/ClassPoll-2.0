@@ -5,4 +5,11 @@
 <div id="waitCard" class="card student-card center"><div class="waiting-circle">◌</div><h2>等待老師發布題目</h2><p class="muted">老師發布後會自動顯示；網路恢復時也會重新同步。</p></div>
 <div id="questionCard" class="card question-card hidden"><div class="question-meta"><span class="tag">單選題</span><span id="pointsTag" class="tag">5 分</span></div><h2 id="studentQuestion">—</h2><div id="answerButtons" class="answer-grid"></div><div id="submitState" class="submit-state hidden" role="status" aria-live="polite">✓ 已成功送出</div><p class="fine center" id="answerPolicy">每題只能提交一次</p></div>
 <div id="closedCard" class="card student-card center hidden"><div class="waiting-circle">✓</div><h2>本題已結束</h2><p class="muted">老師發布下一題後會自動更新。</p></div>
+<article class="card student-card" id="qnaCard" style="margin-top:20px">
+<h2>課堂提問區</h2><p class="muted">你可以提問並查看教師的回覆。每小時最多 10 次提問，內容僅你與授課教師可見。</p>
+<form id="qnaForm" class="stack"><label>我的問題
+<textarea id="qnaText" rows="3" maxlength="1000" required placeholder="請輸入想問老師的問題，最多 1000 字"></textarea></label>
+<button id="qnaSendBtn" class="primary teal-btn" type="submit">提出問題</button></form>
+<div id="qnaHistory" class="list-stack" style="margin-top:18px"><p class="muted">尚無提問。</p></div>
+</article>
 </section></main><footer class="student-footer">ClassPoll · 安全的課堂即時互動</footer><div id="toasts" class="toast-zone" role="status" aria-live="polite"></div></body></html>
