@@ -1,0 +1,10 @@
+{
+  "name":"classpoll-2-quality-suite",
+  "private":true,
+  "type":"module",
+  "scripts":{
+    "test:unit":"node scripts/test-logic.mjs && node scripts/test-platform.mjs",
+    "test:ui":"playwright test"
+  },
+  "devDependencies":{"@playwright/test":"1.56.1"}
+}

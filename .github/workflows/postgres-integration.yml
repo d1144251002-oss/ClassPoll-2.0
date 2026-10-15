@@ -1,0 +1,48 @@
+name: ClassPoll isolated database integration
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: classpoll_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: classpoll_ci_only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d classpoll_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: classpoll_ci
+      PGPASSWORD: classpoll_ci_only
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Bootstrap local-only Supabase Auth-compatible SQL
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db-bootstrap.sql
+      - name: Apply baseline classroom, ballots and new platform modules
+        run: |
+          set -euo pipefail
+          for file in supabase/01_install.sql supabase/07_governance_ballots.sql supabase/08_ballot_draft_update.sql supabase/09_platform_core.sql supabase/10_classroom_qna.sql; do
+            echo "Testing database migration: $file"
+            psql -X -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+      - name: Execute full SQL integration and RLS regression
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db-platform-integration.sql

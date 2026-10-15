@@ -1,12 +1,24 @@
 import {$,txt,show,escapeHtml,toast,failure,setBusy,fmtDate,asOptions,client,query,rpc,exportRows,localLink,guardConfig,listenReconnect,setErrorReporter,taipeiToday,activeParticipation} from './common.js';
 
 let db=null, user=null, authorized=false, tab='overview', roomId='', room=null, active=null;
-let rooms=[],students=[],attendance=[],bank=[],questions=[],keys=[],votes=[],audit=[],errors=[],codes=[];
+let rooms=[],students=[],attendance=[],bank=[],questions=[],keys=[],votes=[],audit=[],errors=[],codes=[],inquiries=[];
+const issuedCodesByRoom=new Map();
 let voteChannel=null,questionChannel=null, chartLive=null,chartPoll=null,chartAccuracy=null;
 let interval=null,refreshing=false,requestGen=0;
+import {parseRosterCSV} from './platform-utils.js';
 const today=taipeiToday;
 const esc=escapeHtml;
 const byId=(xs,id)=>xs.find(x=>x.id===id);
+function showIssuedForRoom(){
+ codes=issuedCodesByRoom.get(roomId)||[];
+ renderCodes();
+}
+function recordIssuedCodes(sourceRoomId,entries){
+ const list=issuedCodesByRoom.get(sourceRoomId)||[];
+ list.push(...entries);
+ issuedCodesByRoom.set(sourceRoomId,list);
+ if(roomId===sourceRoomId)showIssuedForRoom();
+}
 const isOnline=(s)=>s.last_seen && (Date.now()-new Date(s.last_seen).getTime())<120000;
 const participantVotes=(qid)=>votes.filter(x=>x.question_id===qid);
 const truth=(q)=>keys.find(k=>k.question_id===q.id)?.correct_index;
@@ -15,9 +27,10 @@ const currentRoom=()=>rooms.find(x=>x.id===roomId);
 function activateTab(name){
  tab=name;document.querySelectorAll('[id^="tab-"]').forEach(el=>el.classList.toggle('hidden',el.id!==`tab-${name}`));
  document.querySelectorAll('[data-tab]').forEach(el=>el.classList.toggle('nav-active',el.dataset.tab===name));
- const names={overview:'總覽儀表板',rooms:'教室管理',students:'學生與出席',bank:'我的題庫',live:'即時測驗',reports:'學習分析與匯出',audit:'操作紀錄'};
+ const names={overview:'總覽儀表板',rooms:'教室管理',students:'學生與出席',bank:'我的題庫',live:'即時測驗',qna:'課堂即時問答',reports:'學習分析與匯出',audit:'操作紀錄'};
  txt('breadcrumb',names[name]);txt('pageTitle',names[name]);$('sidebar').classList.remove('open');
  if(name==='reports')renderReports();
+ if(name==='qna')void refreshQna();
  setTimeout(()=>{chartLive?.resize();chartPoll?.resize();chartAccuracy?.resize();},0);
 }
 function authUI(){
@@ -40,9 +53,12 @@ async function onLogin(ev){ev.preventDefault();if(!db)return;const b=$('loginBtn
  }catch(e){failure(e,'登入失敗');}finally{$('password').value='';setBusy(b,false);}}
 function clearPrivateState(){
  authorized=false;user=null;roomId='';room=null;active=null;
- rooms=[];students=[];attendance=[];bank=[];questions=[];keys=[];votes=[];audit=[];errors=[];codes=[];
+ rooms=[];students=[];attendance=[];bank=[];questions=[];keys=[];votes=[];audit=[];errors=[];codes=[];inquiries=[];
+ issuedCodesByRoom.clear();
  requestGen++;renderCodes();$('password').value='';
- authUI();
+ for(const chart of [chartLive,chartPoll,chartAccuracy])try{chart?.destroy();}catch(e){console.warn('清除統計圖表失敗',e);}
+ chartLive=null;chartPoll=null;chartAccuracy=null;
+ renderAll();renderQna();authUI();
 }
 async function onLogout(){
  if(!db)return;
@@ -54,25 +70,43 @@ async function onLogout(){
  }catch(e){failure(e,'登出失敗');}
 }
 async function getAll(table, filter=null,sort=null){
- const list=[];for(let offset=0;offset<25000;offset+=500){
-   let q=db.from(table).select('*').range(offset,offset+499);
-   if(filter)q=filter(q);
-   if(sort)q=q.order(sort,{ascending:false});
-   const page=await query(q);list.push(...(page||[]));if(!page || page.length<500)break;
+ // Stable server-side ordering avoids duplicate/missing records across range pages.
+ // Never silently return a truncated attendance, roster or grade export.
+ const pk={cp2_rooms:'id',cp2_students:'id',cp2_attendance:'student_id',
+   cp2_bank:'id',cp2_questions:'id',cp2_answer_keys:'question_id',
+   cp2_votes:'id',cp2_audit:'id',cp2_errors:'id'}[table];
+ if(!pk)throw Error('不支援的資料表查詢：'+table);
+ const pageSize=500, maxRows=100000, result=[];
+ for(let offset=0;offset<maxRows;offset+=pageSize){
+  let q=db.from(table).select('*');
+  if(filter)q=filter(q);
+  if(sort)q=q.order(sort,{ascending:false});
+  q=q.order(pk,{ascending:true});
+  if(table==='cp2_attendance')q=q.order('attended_on',{ascending:false});
+  q=q.range(offset,offset+pageSize-1);
+  const page=await query(q);
+  result.push(...(page||[]));
+  if(!page || page.length<pageSize)return result;
  }
- return list;
+ throw Error('查詢超過十萬筆，為避免資料截斷已停止匯出；請採分班與日期批次匯出');
 }
 async function refreshAll(){
  if(!authorized||refreshing)return;refreshing=true;
+ const sessionId=user?.id;
  try{
-   rooms=await getAll('cp2_rooms',null,'created_at');bank=await getAll('cp2_bank',null,'created_at');
-   if(!roomId || !rooms.some(r=>r.id===roomId))roomId=rooms[0]?.id||'';
+   const [roomRows,bankRows]=await Promise.all([
+     getAll('cp2_rooms',null,'created_at'),getAll('cp2_bank',null,'created_at')
+   ]);
+   // Ignore stale responses after sign-out / account transition.
+   if(!authorized||user?.id!==sessionId)return;
+   rooms=roomRows;bank=bankRows;
+   if(!roomId || !rooms.some(r=>r.id===roomId)){roomId=rooms[0]?.id||'';showIssuedForRoom();}
    renderRoomSelector();renderRooms();renderBank();await refreshRoom();
- }catch(e){failure(e,'同步管理資料失敗');}finally{refreshing=false;}
+ }catch(e){if(authorized)failure(e,'同步管理資料失敗');}finally{refreshing=false;}
 }
 async function refreshRoom(){
  const generation=++requestGen;
- if(!roomId){room=null;students=[];attendance=[];questions=[];keys=[];votes=[];audit=[];errors=[];active=null;await clearChannels();renderAll();return;}
+ if(!roomId){room=null;students=[];attendance=[];questions=[];keys=[];votes=[];audit=[];errors=[];inquiries=[];active=null;await clearChannels();renderAll();return;}
  const r=currentRoom();if(!r)return;
  try{
    const [s,a,q,log,errs]=await Promise.all([
@@ -89,6 +123,7 @@ async function refreshRoom(){
    }
    if(generation!==requestGen)return;
    room=r;students=s;attendance=a;questions=q;keys=k;votes=v;audit=log;errors=errs;
+   if(tab==='qna')void refreshQna();
    active=q.find(x=>x.status==='published')||null;
    renderAll();await resetSubscriptions();
  }catch(e){failure(e,'載入教室資料失敗');}
@@ -189,9 +224,13 @@ function renderLive(){
  $('voteRows').innerHTML=active?participantVotes(active.id).map(v=>{const s=students.find(x=>x.id===v.student_id);return `<tr><td>${esc(s?.student_no||'—')}</td><td>${esc(s?.display_name||'—')}</td><td>${'ABCDEF'[v.choice]||'—'} · ${esc(opts[v.choice]||'')}</td><td>${fmtDate(v.updated_at)}</td></tr>`;}).join('')||'<tr><td colspan="4" class="empty">目前尚無回答</td></tr>':'<tr><td colspan="4" class="empty">尚未開始測驗</td></tr>';
 }
 function computeReports(){
- const scoreMap=new Map(students.map(s=>[s.id,{學號:s.student_no,姓名:s.display_name,已作答:0,答對:0,獲得分數:0,可得總分:questions.reduce((a,q)=>a+q.points,0)}]));
+ const totalPoints=questions.reduce((sum,q)=>sum+q.points,0);
+ const questionById=new Map(questions.map(q=>[q.id,q]));
+ const studentById=new Map(students.map(s=>[s.id,s]));
+ const correctByQuestion=new Map(keys.map(k=>[k.question_id,k.correct_index]));
+ const scoreMap=new Map(students.map(s=>[s.id,{學號:s.student_no,姓名:s.display_name,已作答:0,答對:0,獲得分數:0,可得總分:totalPoints}]));
  let correct=0,graded=0;
- const detail=votes.map(v=>{const q=questions.find(q=>q.id===v.question_id);const s=students.find(s=>s.id===v.student_id);const key=q&&truth(q);
+ const detail=votes.map(v=>{const q=questionById.get(v.question_id);const s=studentById.get(v.student_id);const key=correctByQuestion.get(v.question_id);
  const passed=key!==undefined && v.choice===key;if(key!==undefined){graded++;if(passed)correct++;}
  const score=passed?q?.points||0:0;const rec=scoreMap.get(v.student_id);if(rec){rec.已作答++;rec.答對+=Number(passed);rec.獲得分數+=score;}
  return {學號:s?.student_no||'',姓名:s?.display_name||'',題目:q?.prompt||'',作答選項:'ABCDEF'[v.choice],正確答案:key===undefined?'':'ABCDEF'[key],是否答對:passed?'是':'否',得分:score,作答時間:fmtDate(v.updated_at)};});
@@ -204,6 +243,28 @@ function renderReports(){
  return `<div class="list-item"><div><strong>${esc(q.prompt)}</strong><p>${esc(q.status)} · ${q.points} 分 · ${list.length} 位作答 · 正確率 ${list.length?Math.round(n/list.length*100)+'%':'—'}</p></div><span class="tag">${fmtDate(q.created_at)}</span></div>`;}).join('')||'<div class="empty">尚無歷史題目</div>';
  const ordered=[...questions].reverse();chartAccuracy=barChart(chartAccuracy,'accuracyChart',ordered.map((q,i)=>`第 ${i+1} 題`),ordered.map(q=>{const l=participantVotes(q.id);return l.length?Math.round(l.filter(v=>v.choice===truth(q)).length/l.length*100):0;}));
 }
+async function refreshQna(){
+ const expectedRoom=roomId;
+ if(!authorized||!expectedRoom){inquiries=[];renderQna();return;}
+ try{
+  const items=await rpc(db,'cp2_qna_list',{p_room:expectedRoom,p_limit:150});
+  if(expectedRoom!==roomId||!authorized)return;
+  inquiries=items||[];renderQna();
+ }catch(e){console.error('問答同步失敗',e);toast('課堂問答暫時無法同步',true);}
+}
+function renderQna(){
+ const list=$('qnaList');if(!list)return;
+ txt('qnaTotal',inquiries.length);
+ txt('qnaPending',inquiries.filter(x=>x.status==='open').length);
+ txt('qnaAnswered',inquiries.filter(x=>x.status==='answered').length);
+ list.innerHTML=inquiries.map(item=>{
+  const status=item.status==='answered'?'已回覆':item.status==='archived'?'已封存':'待回覆';
+  const controls=item.status==='archived'?'':'<div class="inline-actions"><button class="mini" data-act="replyQna" data-id="'+item.id+'">回覆</button><button class="mini" data-act="archiveQna" data-id="'+item.id+'">封存</button></div>';
+  return '<div class="list-item"><div><strong>'+esc(item.display_name)+'（'+esc(item.student_no)+'）</strong>'+
+   '<p>'+esc(item.body)+'</p><p class="fine">'+esc(fmtDate(item.created_at))+' · '+status+'</p>'+
+   (item.answer?'<p><b>教師回覆：</b>'+esc(item.answer)+'</p>':'')+'</div>'+controls+'</div>';
+ }).join('')||'<div class="empty">目前沒有學生提問</div>';
+}
 function renderAudit(){
  $('errorRows').innerHTML=errors.slice(0,100).map(x=>`<tr><td>${fmtDate(x.created_at)}</td><td>${esc(x.scope)}</td><td>${esc(x.message)}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">尚無錯誤回報</td></tr>';
  $('auditRows').innerHTML=audit.slice(0,150).map(a=>`<tr><td>${fmtDate(a.created_at)}</td><td>${esc(a.event)}</td><td>${esc(JSON.stringify(a.details))}</td></tr>`).join('')||'<tr><td colspan="3" class="empty">尚無操作紀錄</td></tr>';
@@ -215,36 +276,30 @@ async function createRoom(ev){ev.preventDefault();const b=ev.submitter;if(!db)re
  }catch(e){failure(e,'建立教室失敗');}finally{setBusy(b,false);}}
 async function bulkImport(){
  if(!roomId)return toast('請先選擇教室',true);
- const parsed=$('bulkRoster').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
- if(!parsed.length)return toast('請輸入至少一位學生',true);
- if(parsed.length>200)return toast('每次最多建立 200 位學生',true);
- const b=$('bulkImport');setBusy(b,true,'正在建立學生…');let success=0,failed=[];
+ const b=$('bulkImport');setBusy(b,true,'正在驗證並匯入整批名冊…');
+ const originalRoom=roomId;
  try{
-   for(const row of parsed){
-     const split=row.split(',');const no=split.shift()?.trim(),name=split.join(',').trim();
-     if(!no||!name){failed.push({row,reason:'格式不正確'});continue;}
-     try{
-       const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});
-       if(!result?.[0])throw Error('伺服器未回傳入班碼');
-       codes.push({教室代碼:room.code,學號:no,姓名:name,個人入班碼:result[0].access_code});
-       success++;
-     }catch(e){failed.push({row,reason:e.message});}
-   }
-   renderCodes();
-   // Keep original failed rows so teachers can correct and retry without losing names.
-   $('bulkRoster').value=failed.map(x=>x.row).join('\n');
+  const parsed=parseRosterCSV($('bulkRoster').value);
+  if(!confirm('將一次新增 '+parsed.length+' 位學生。若有任何學號重複或格式錯誤，資料庫會取消整批新增。確定嗎？'))return;
+  const created=await rpc(db,'cp2_roster_import',{p_room:originalRoom,p_roster:parsed});
+  if(!Array.isArray(created)||created.length!==parsed.length)throw Error('回傳的名冊筆數與提交不一致，請先重新查詢再操作');
+  const roomForImport=rooms.find(r=>r.id===originalRoom);
+  // Issued credentials are transient; no access hash is ever stored on the client.
+  const newCodes=created.map(item=>({教室代碼:roomForImport?.code||'',學號:item.student_no,姓名:item.display_name,個人入班碼:item.access_code}));
+  recordIssuedCodes(originalRoom,newCodes);
+  if(roomId===originalRoom){
+   $('bulkRoster').value='';
    await refreshRoom();
-   toast(`批次新增完成：成功 ${success} 人、失敗 ${failed.length} 人`,failed.length>0);
-   if(failed.length)console.warn('批次新增失敗',failed.map(x=>`${x.row}：${x.reason}`));
- }catch(e){
-   failure(e,'同步學生名冊失敗；已建立的入班碼仍保留在畫面上');
- }finally{
-   setBusy(b,false);
- }
+  }else{
+   toast('名冊匯入成功。切回原教室後可安全匯出新發放的入班碼',true);
+  }
+  toast('已安全新增 '+created.length+' 位學生，請立即匯出入班碼');
+ }catch(e){failure(e,'整批匯入取消，未新增任何學生');}
+ finally{setBusy(b,false);}
 }
 async function createStudent(ev){ev.preventDefault();if(!roomId)return toast('請先選擇教室',true);const b=ev.submitter;setBusy(b,true);
  try{const no=$('studentNumber').value.trim(),name=$('studentName').value.trim();const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});const entry=result?.[0];if(!entry)throw Error('未取得新學生入班碼');
- codes.push({教室代碼:room.code,學號:no,姓名:name,個人入班碼:entry.access_code});renderCodes();$('studentForm').reset();await refreshRoom();toast('學生已新增，請儲存並安全發放入班碼');
+ recordIssuedCodes(roomId,[{教室代碼:room.code,學號:no,姓名:name,個人入班碼:entry.access_code}]);$('studentForm').reset();await refreshRoom();toast('學生已新增，請儲存並安全發放入班碼');
  }catch(e){failure(e,'新增學生失敗');}finally{setBusy(b,false);}}
 function renderCodes(){
  show('issuedCodes',codes.length>0);
@@ -253,7 +308,7 @@ function renderCodes(){
 function bankFormData(prefix){
  const opt=[...document.querySelectorAll(`.${prefix}Option`)].map(e=>e.value.trim()).filter(Boolean);
  const correct=Number($(`${prefix}Answer`).value),points=Number($(`${prefix}Points`).value),prompt=$(`${prefix}Prompt`).value.trim();
- if(!prompt||opt.length<2||opt.length>6||correct>=opt.length||new Set(opt).size!==opt.length)throw Error('題目至少兩個不重複選項，且正確答案必須在選項範圍內');
+ if(!prompt||opt.length<2||opt.length>6||!Number.isInteger(correct)||correct<0||correct>=opt.length||new Set(opt).size!==opt.length)throw Error('題目至少兩個不重複選項，且正確答案必須在選項範圍內');
  if(!Number.isInteger(points)||points<0||points>100)throw Error('分數須在 0~100');
  return {prompt,options:opt,correct_index:correct,points};
 }
@@ -278,12 +333,24 @@ async function close(){if(!active)return;if(!confirm('確定要結束目前題�
 async function handleActions(ev){const b=ev.target.closest('[data-act]');if(!b)return;
  const {act,id}=b.dataset;
  try{
- if(act==='chooseRoom'){roomId=id;codes=[];renderCodes();await refreshRoom();activateTab('overview');}
+ if(act==='replyQna'){
+  const item=inquiries.find(q=>q.id===id);if(!item)return;
+  const answer=window.prompt('回覆 '+item.display_name+' 的問題：'+item.body,item.answer||'');
+  if(answer===null)return;
+  if(!answer.trim()||answer.trim().length>2000)throw Error('回覆需介於 1 至 2000 字');
+  await rpc(db,'cp2_qna_reply',{p_question:id,p_answer:answer.trim()});
+  await refreshQna();toast('教師回覆已儲存');
+ }
+ if(act==='archiveQna'){
+  if(!window.confirm('封存後無法再回覆，確定嗎？'))return;
+  await rpc(db,'cp2_qna_archive',{p_question:id});await refreshQna();toast('提問已封存');
+ }
+ if(act==='chooseRoom'){roomId=id;showIssuedForRoom();await refreshRoom();activateTab('overview');}
  if(act==='toggleRoom'){const r=byId(rooms,id);if(!confirm(`確定要${r.is_active?'停用':'啟用'}教室 ${r.title}？`))return;await query(db.from('cp2_rooms').update({is_active:!r.is_active}).eq('id',id));await refreshAll();}
  if(act==='resetStudent'){const s=byId(students,id);
  if(!confirm(`重新簽發 ${s.display_name} 的入班碼？舊入班碼與舊裝置將立即失效，歷史成績會保留。`))return;
  const code=await rpc(db,'cp2_rotate_student',{p_student:id});
- codes.push({教室代碼:room.code,學號:s.student_no,姓名:s.display_name,個人入班碼:code});renderCodes();
+ recordIssuedCodes(roomId,[{教室代碼:room.code,學號:s.student_no,姓名:s.display_name,個人入班碼:code}]);
  await refreshRoom();toast('已重新簽發入班碼，請立即儲存並交給學生');}
  if(act==='toggleStudent'){const s=byId(students,id);if(!confirm(`確定要${s.is_active?'停用':'啟用'} ${s.display_name}？`))return;await query(db.from('cp2_students').update({is_active:!s.is_active}).eq('id',id));await refreshRoom();}
  if(act==='useBank'){loadBankToLive(byId(bank,id));}
@@ -303,11 +370,23 @@ function wire(){
  $('roomForm').addEventListener('submit',createRoom);$('studentForm').addEventListener('submit',createStudent);
  $('bankForm').addEventListener('submit',saveBank);$('publishForm').addEventListener('submit',publish);
  $('bankReset').addEventListener('click',clearBankForm);$('bulkImport').addEventListener('click',bulkImport);
+ $('rosterUpload').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+   if(file.size>1000000)throw Error('名冊檔案上限 1 MB');
+   const content=await file.text();
+   const parsed=parseRosterCSV(content);
+   $('bulkRoster').value=content;
+   toast('已讀取 '+parsed.length+' 名學生，請檢查內容後按「批次新增學生」');
+  }catch(err){failure(err,'讀取 CSV 名冊失敗');}
+  finally{e.target.value='';}
+ });
  $('closeBtn').addEventListener('click',close);
+ $('refreshQnaBtn').addEventListener('click',refreshQna);
  $('sideNav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)activateTab(b.dataset.tab);});
  $('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));
  document.addEventListener('click',handleActions);
- $('roomSelect').addEventListener('change',async e=>{roomId=e.target.value;codes=[];renderCodes();await refreshRoom();});
+ $('roomSelect').addEventListener('change',async e=>{roomId=e.target.value;showIssuedForRoom();await refreshRoom();});
  $('selectBank').addEventListener('change',e=>{const b=byId(bank,e.target.value);if(b)loadBankToLive(b);});
  $('refreshBtn').addEventListener('click',refreshAll);
  $('copyInvite').addEventListener('click',()=>room?navigator.clipboard.writeText(localLink('student.html',room.code)).then(()=>toast('學生連結已複製')).catch(e=>failure(e,'無法複製')):toast('請先選擇教室',true));
@@ -329,6 +408,6 @@ window.addEventListener('load',async()=>{
      setTimeout(()=>{void clearChannels();},0);
    }
  });
- interval=setInterval(()=>{tick();if(authorized&&!document.hidden)refreshLiveOnly();},20000);setInterval(tick,1000);tick();
+ interval=setInterval(()=>{tick();if(authorized&&!document.hidden){refreshLiveOnly();if(tab==='qna')void refreshQna();}},20000);setInterval(tick,1000);tick();
  }catch(e){failure(e,'初始化失敗');}
 });

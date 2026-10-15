@@ -1,8 +1,6 @@
 name: ClassPoll deployed-pages smoke test
 
 on:
-  push:
-    branches: [main]
   workflow_run:
     workflows: ["pages build and deployment"]
     types: [completed]
@@ -12,18 +10,18 @@ permissions:
 
 jobs:
   deployed-pages:
-    if: ${{ github.event_name == 'push' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 12
     steps:
-      - name: Check live homepage, teacher page, student page and JS
+      - name: Check deployed main pages, management and classroom modules
         shell: bash
         run: |
           set -euo pipefail
           root="https://d1144251002-oss.github.io/ClassPoll-2.0"
-          for endpoint in "/" "/teacher.html" "/student.html" "/ballots.html" "/vote.html" "/assets/ballots.css" "/js/common.js" "/js/teacher.js" "/js/student.js" "/js/ballots.js" "/js/vote.js"; do
+          for endpoint in "/" "/teacher.html" "/student.html" "/ballots.html" "/vote.html" "/admin.html" "/assets/platform.css" "/assets/ballots.css" "/js/platform.js" "/js/platform-utils.js" "/js/common.js" "/js/teacher.js" "/js/student.js" "/js/ballots.js" "/js/vote.js"; do
             echo "Checking ${root}${endpoint}"
-            curl --fail --silent --show-error --location --retry 8 --retry-all-errors --retry-delay 5 --max-time 25 "${root}${endpoint}" -o /tmp/classpoll-smoke-body
+            curl --fail --silent --show-error --location --retry 30 --retry-all-errors --retry-delay 5 --max-time 25 "${root}${endpoint}" -o /tmp/classpoll-smoke-body
             test -s /tmp/classpoll-smoke-body
           done
           curl --fail --silent --show-error --location --max-time 25 "${root}/teacher.html" -o /tmp/classpoll-teacher.html
@@ -34,4 +32,12 @@ jobs:
           grep -q "createForm" /tmp/classpoll-ballots.html
           curl --fail --silent --show-error --location --max-time 25 "${root}/vote.html" -o /tmp/classpoll-vote.html
           grep -q "joinForm" /tmp/classpoll-vote.html
+          curl --fail --silent --show-error --location --max-time 25 "${root}/admin.html" -o /tmp/classpoll-admin.html
+          grep -q "workspace" /tmp/classpoll-admin.html
+          grep -q "restoreFile" /tmp/classpoll-admin.html
+          grep -q "roleRoom" /tmp/classpoll-admin.html
+          curl --fail --silent --show-error --location --max-time 25 "${root}/student.html" -o /tmp/classpoll-student.html
+          grep -q "qnaForm" /tmp/classpoll-student.html
+          curl --fail --silent --show-error --location --max-time 25 "${root}/teacher.html" -o /tmp/classpoll-teacher.html
+          grep -q "tab-qna" /tmp/classpoll-teacher.html
           echo "Live GitHub Pages endpoints available."

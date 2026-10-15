@@ -25,7 +25,11 @@ jobs:
           node --check js/teacher.js
           node --check js/ballots.js
           node --check js/vote.js
+          node --check js/platform.js
+          node --check js/platform-utils.js
       - name: Validate pages, imports, config, SQL and RLS
         run: node scripts/check-static.mjs
       - name: Test Taiwan calendar, class participation, and escaping behavior
         run: node scripts/test-logic.mjs
+      - name: Test atomic CSV imports and AES-256-GCM backup recovery
+        run: node scripts/test-platform.mjs
