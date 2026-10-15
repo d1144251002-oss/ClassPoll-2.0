@@ -88,7 +88,7 @@ RETURNS TABLE(created_at timestamptz,event text,details jsonb)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 BEGIN
  IF NOT private.cp2_room_can_view(p_room) THEN RAISE EXCEPTION '沒有此教室的稽核查詢權限' USING errcode='42501'; END IF;
- IF p_limit<1 OR p_limit>200 THEN RAISE EXCEPTION '筆數須介於 1 至 200'; END IF;
+ IF p_limit IS NULL OR p_limit<1 OR p_limit>200 THEN RAISE EXCEPTION '筆數須介於 1 至 200'; END IF;
  RETURN QUERY SELECT a.created_at,a.event,a.details FROM public.cp2_audit a
  WHERE a.room_id=p_room ORDER BY a.created_at DESC LIMIT p_limit;
 END $$;
@@ -169,6 +169,12 @@ BEGIN
    SELECT coalesce(jsonb_agg(jsonb_build_object('student_no',x.student_no,'display_name',x.display_name,'access_code',x.access_code)),'[]'::jsonb)
    INTO v_codes FROM private.cp2_roster_import(v_room,v_s) x;
  ELSE v_codes:='[]'::jsonb; END IF;
+ -- Preserve explicit inactive roster entries; restore must not reactivate suspended students.
+ UPDATE public.cp2_students s SET is_active=false
+ FROM jsonb_array_elements(v_s) AS entry(data)
+ WHERE s.room_id=v_room
+ AND s.student_no=trim(entry.data->>'student_no')
+ AND entry.data->>'active'='false';
  INSERT INTO public.cp2_audit(room_id,actor_uid,event,details)
  VALUES(v_room,v_uid,'room.restore.roster',jsonb_build_object('from_backup',true,'students',jsonb_array_length(v_s)));
  RETURN jsonb_build_object('room_id',v_room,'new_codes',v_codes);
