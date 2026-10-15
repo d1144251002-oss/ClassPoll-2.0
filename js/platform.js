@@ -33,10 +33,22 @@ async function login(event){
  finally{$('password').value='';setBusy(button,false);}
 }
 function resetState(){
+ // Abort all in-flight dashboard responses before clearing sensitive DOM content.
+ lastRequest++;
  authorized=false;user=null;overview={rooms:[]};roles=[];audit=[];issuedCodes=[];
+ currentRoomId='';currentRoleRoom='';currentAuditRoom='';
+ for(const id of ['roomRows','roleList','auditRows','restoreCodes',
+                  'roomSearch','roleEmail','restoreCode','restoreTitle']){
+  const node=$(id);
+  if(node && 'value' in node)node.value='';
+  else node?.replaceChildren();
+ }
+ for(const id of ['roomTotal','studentTotal','presentTotal','errorTotal'])txt(id,'0');
+ txt('roleSummary','');
  $('password').value='';$('backupPassword').value='';$('backupConfirm').value='';
  $('restorePassword').value='';$('restoreFile').value='';
- show('restoreCodesPanel',false);setGate();
+ for(const id of ['roleRoom','auditRoom','backupRoom'])$(id).replaceChildren();
+ show('restoreCodesPanel',false);error('');setGate();
 }
 async function logout(){try{await db.auth.signOut();resetState();toast('已登出');}catch(e){failure(e,'登出失敗');}}
 function fillSelector(id,items,selected,onEmpty='沒有可選教室'){
