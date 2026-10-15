@@ -165,7 +165,7 @@ RETURNS TABLE(id uuid,student_no text,display_name text,latest_text text,revisio
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_course uuid;
 BEGIN
- SELECT course_id INTO v_course FROM public.cp3_assignments WHERE id=p_assignment;
+ SELECT a.course_id INTO v_course FROM public.cp3_assignments a WHERE a.id=p_assignment;
  IF v_course IS NULL OR NOT private.cp3_can_edit_course(v_course)
  THEN RAISE EXCEPTION '沒有閱卷權限' USING errcode='42501'; END IF;
  RETURN QUERY SELECT s.id,st.student_no,st.display_name,s.latest_text,s.revision,
