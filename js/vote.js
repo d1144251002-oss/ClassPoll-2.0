@@ -1,6 +1,6 @@
 import {$,show,txt,escapeHtml as esc,toast,failure,setBusy,client,rpc,guardConfig} from './common.js';
 
-let db=null,member=null,ballots=[],loading=false,pendingSync=false;
+let db=null,member=null,ballots=[],loading=false,pendingSync=false,lastRenderSignature='';
 const storedRoom='classpoll-2-governance-last-room';
 function announce(message,bad=false){txt('connStatus',message);$('connStatus').style.color=bad?'#a0414b':'#1c6065';}
 function dateText(value){return new Date(value).toLocaleString('zh-TW',{hour12:false});}
@@ -9,6 +9,15 @@ function state(b){
  if(b.status==='closed'||new Date(b.closes_at).getTime()<=now)return {label:'投票已結束',css:'closed',open:false};
  if(new Date(b.opens_at).getTime()>now)return {label:'即將開始',css:'wait',open:false};
  return {label:'開放投票',css:'',open:b.status==='active'};
+}
+function renderSignature(items){
+ // Ignore periodic metadata reads that did not change ballot content or state.
+ // Preserve students' in-progress radio / checkbox selections.
+ return JSON.stringify(items.map(b=>[
+  b.id,b.title,b.description,b.mode,b.options,b.min_choices,b.max_choices,
+  b.opens_at,b.closes_at,b.status,b.eligible_count,b.has_voted,b.receipt,
+  b.results_available,b.min_report_votes,state(b).label
+ ]));
 }
 async function anonymousSession(){
  const {data,error}=await db.auth.getSession();if(error)throw error;
@@ -44,12 +53,12 @@ async function join(event){
  finally{setBusy(btn,false);$('joinAccess').value='';}
 }
 async function enterRoom(info){
- member=info;localStorage.setItem(storedRoom,member.room_id);
+ member=info;lastRenderSignature='';localStorage.setItem(storedRoom,member.room_id);
  show('joinGate',false);show('voterApp',true);txt('roomName',info.room_title);txt('studentName',info.display_name+' · 名冊身分已驗證');
  await sync();
 }
 function leave(){
- member=null;ballots=[];pendingSync=false;
+ member=null;ballots=[];pendingSync=false;lastRenderSignature='';
  localStorage.removeItem(storedRoom);$('ballotCards').replaceChildren();
  show('voterApp',false);show('joinGate',true);
 }
@@ -60,7 +69,9 @@ async function sync(){
  try{
   const response=await rpc(db,'cp2_ballot_list',{p_room:roomId});
   if(member?.room_id!==roomId)return;
-  ballots=response||[];render();
+  ballots=response||[];
+  const signature=renderSignature(ballots);
+  if(signature!==lastRenderSignature){lastRenderSignature=signature;render();}
   announce('投票狀態已同步 · 伺服器負責驗證投票期間與單人單票');
  }catch(e){if(member?.room_id===roomId){announce('連線不穩，稍後重試',true);console.error('表決同步失敗',e);}}
  finally{loading=false;if(pendingSync){pendingSync=false;void sync();}}
@@ -117,7 +128,7 @@ async function cast(event){
  try{
   const receipt=await rpc(db,'cp2_ballot_cast',{p_ballot:b.id,p_choices:picks});
   if(!receipt)throw Error('伺服器沒有回傳收件憑證');
-  b.has_voted=true;b.receipt=receipt;render();
+  b.has_voted=true;b.receipt=receipt;lastRenderSignature=renderSignature(ballots);render();
   toast('選票已成功提交，請保存收件憑證');void sync();
  }catch(e){failure(e,'投票未完成');}
  finally{setBusy(btn,false);}
