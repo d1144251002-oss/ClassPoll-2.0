@@ -86,7 +86,7 @@ BEGIN
 END $$;
 -- Include the Q&A history in encrypted owner-only classroom exports.
 CREATE OR REPLACE FUNCTION private.cp2_room_snapshot(p_room uuid)
-RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $$
 DECLARE v_r record;
 BEGIN
  IF NOT private.cp2_owns(p_room) THEN RAISE EXCEPTION '只有教室擁有者可匯出完整備份' USING errcode='42501'; END IF;
@@ -113,7 +113,7 @@ BEGIN
      FROM public.cp2_inquiries i JOIN public.cp2_students s ON s.id=i.student_id
      WHERE i.room_id=p_room),'[]'::jsonb)
  );
-END $;
+END $$;
 
 CREATE OR REPLACE FUNCTION public.cp2_qna_post(p_room uuid,p_body text)
 RETURNS uuid LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
