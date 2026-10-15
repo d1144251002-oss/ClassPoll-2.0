@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#142846"><title>正式表決管理｜ClassPoll 2.0</title>
+<link rel="stylesheet" href="assets/ballots.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script type="module" src="js/ballots.js"></script>
+</head>
+<body class="gov-page">
+<header class="gov-header"><a class="gov-brand" href="index.html"><span class="gov-emblem">C</span><span>ClassPoll <small>2.0</small></span></a>
+<div class="gov-nav"><a href="teacher.html">課堂管理</a><a href="vote.html">學生投票</a><span class="gov-pill">組織表決 · 教師管理</span></div></header>
+<main class="gov-main">
+<div class="gov-banner"><div><span class="gov-eyebrow">GOVERNANCE &amp; DECISION WORKFLOW</span>
+<h1>正式投票與表決中心</h1><p>草稿審查、資格名冊凍結、伺服器控管投票期間、單人單票、結果門檻及彙總報表。</p></div>
+<span class="gov-shield">◆<small>INTEGRITY FIRST</small></span></div>
+<div id="configNotice" class="gov-alert hidden">Supabase 設定或 SDK 尚未載入，請檢查 js/config.js 與網路連線。</div>
+<div id="errorAlert" class="gov-alert hidden" role="alert"></div>
+<section id="loginGate" class="gov-card gov-auth">
+<h2>授權管理員登入</h2><p class="gov-muted">僅已授予教師權限的使用者能建立、啟用或結束正式表決。</p>
+<form id="loginForm" class="gov-form">
+<label>電子郵件<input id="email" type="email" required autocomplete="username" placeholder="teacher@school.edu"></label>
+<label>密碼<input id="password" type="password" required minlength="6" autocomplete="current-password"></label>
+<button type="submit" id="loginBtn" class="gov-primary">安全登入</button>
+</form></section>
+<section id="dashboard" class="hidden">
+<div class="gov-toolbar"><label>選擇教室 <select id="roomSelect"><option value="">選擇已建立的教室</option></select></label>
+<span id="adminIdentity" class="gov-muted"></span><button id="refreshBtn" type="button" class="gov-outline">重新整理</button><button id="logoutBtn" type="button" class="gov-outline">登出</button></div>
+<div class="gov-columns">
+<section class="gov-card"><div class="gov-card-head"><span class="gov-eyebrow">NEW BALLOT</span><h2>建立正式表決草稿</h2><p>草稿不開放投票；啟用時會凍結當時有效的學生名冊。啟用後題目與規則不可更改。</p></div>
+<form id="createForm" class="gov-form">
+<label>表決主題<input id="ballotTitle" maxlength="160" required placeholder="例如：下學期社團活動方案"></label>
+<label>表決說明<textarea id="ballotDescription" rows="3" maxlength="2000" placeholder="說明背景、決議範圍、選票效力與審查程序"></textarea></label>
+<label>投票形式<select id="ballotMode">
+<option value="single">單選制（每人選一項）</option>
+<option value="multiple">複選制（自訂可選數）</option>
+<option value="yesno">表決制（贊成／反對／棄權）</option>
+</select></label>
+<label>候選項目／選項（每行一項，2～16 項）<textarea id="ballotOptions" rows="5" maxlength="2200" required placeholder="方案 A&#10;方案 B&#10;方案 C"></textarea></label>
+<div class="gov-two"><label>至少選幾項<input id="minChoices" type="number" min="1" max="16" value="1" required></label>
+<label>最多選幾項<input id="maxChoices" type="number" min="1" max="16" value="1" required></label></div>
+<label class="gov-checkbox"><input id="startNow" type="checkbox" checked> 啟用後立即開放</label>
+<div class="gov-two"><label>預定開放時間<input id="startsAt" type="datetime-local" disabled></label>
+<label>截止時間<input id="endsAt" type="datetime-local" required></label></div>
+<label>最低結果公開票數 <input id="reportMin" type="number" min="1" max="100" value="3" required></label>
+<p class="gov-note">低於最低公開票數時，教師及學生都不能查看選項統計。設為 1 可能暴露小型投票的個人意向；正式投票建議維持至少 3 票。</p>
+<button class="gov-primary" type="submit" id="createBtn">建立草稿（不立即啟用）</button>
+</form></section>
+<section class="gov-card gov-list-card"><div class="gov-card-head"><span class="gov-eyebrow">BALLOT REGISTER</span><h2>表決名冊與進度</h2>
+<p>需先從「課堂管理」建立教室與學生，才能啟用投票。</p></div>
+<div id="ballotList" class="gov-ballot-list"><p class="gov-muted">請選擇教室。</p></div></section>
+</div>
+<section class="gov-card gov-results hidden" id="resultSection"><div class="gov-card-head"><span class="gov-eyebrow">PUBLISHED TALLY</span><h2 id="resultTitle">彙總結果</h2><p id="resultMeta" class="gov-muted"></p></div>
+<div id="resultChart"></div><div class="gov-actions"><button id="exportResult" type="button" class="gov-outline">下載公開結果報表</button><button id="hideResult" type="button" class="gov-outline">關閉結果</button></div></section>
+</section>
+<footer class="gov-footer">ClassPoll 校園表決模組 · 管理員不得直接讀取個人選擇 · 非政府選舉認證系統</footer>
+</main><div id="toasts" class="gov-toasts" role="status" aria-live="polite"></div>
+</body></html>
