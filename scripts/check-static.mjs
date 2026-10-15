@@ -14,7 +14,7 @@ const required = [
   'assets/style.css', 'assets/ballots.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql',
   'supabase/02_grant_teacher.sql', 'supabase/03_fix_rooms_rls.sql',
   'supabase/04_performance_indexes.sql',
-  'supabase/05_fix_vote_deadline.sql'
+  'supabase/05_fix_vote_deadline.sql', 'supabase/08_ballot_draft_update.sql'
 ];
 for (const file of required) assert(present(file), 'Missing required file: ' + file);
 for (const pageName of ['index', 'teacher', 'student', 'ballots', 'vote']) {
@@ -74,4 +74,6 @@ assert(governance.includes('FOR SHARE'), 'Ballot casting must coordinate concurr
 assert(governance.includes('clock_timestamp()'), 'Ballot time must be server enforced');
 assert(governance.includes('REVOKE ALL ON TABLE'), 'Ballot internals must not be directly accessible');
 assert(governance.includes('min_report_votes'), 'Privacy threshold required');
+assert(governance.includes('v_n<v_b.min_report_votes'), 'Activation must reject impossible reporting thresholds');
+assert(read('supabase/08_ballot_draft_update.sql').includes("v_b.status<>'draft'"), 'Activated ballot choices must remain immutable');
 console.log('ClassPoll ballot policy static checks passed.');
