@@ -1,106 +1,149 @@
-# ClassPoll 2.0 — 大學課堂即時投票／測驗平台
+# ClassPoll 2.0 — 龍華科技大學校園教學互動平台
 
-> 使用純 HTML/CSS/ES Modules + Supabase，部署於 GitHub Pages。此儲存庫已連接 Supabase 並進行資料庫層交易回滾測試及 GitHub Actions 檢查；**尚未完成完整的真實瀏覽器多角色端到端驗收或獨立資安認證**。
+> **部署定位**：這是配合龍華科技大學使用情境設計的校園主題版。現階段公開服務託管於 GitHub Pages，後端使用 Supabase。**首頁呈現校名不代表學校已正式核准、已接入校務單一登入（SSO），或已部署在龍華科技大學自有伺服器**；是否以校方正式服務名義啟用，應由校方權責單位確認。  
+> 技術架構：靜態 HTML／CSS／JavaScript ES Modules + Supabase Auth／PostgREST／PostgreSQL RLS／Realtime。所有資料存取權限由資料庫決定，不由前端選單決定。
 
-## 統一教學管理平台 — 發行候選版（2026-10-15）
+## 1. 單一入口與使用網址
 
-平台升級來源為 [PR #1](https://github.com/d1144251002-oss/ClassPoll-2.0/pull/1)。正式發布狀態以 GitHub `main`、Pages 部署及資料庫驗收結果為準；不要把自動化測試視為零 BUG 保證。
+**主要登入及工作台**：[ClassPoll 校園入口](https://d1144251002-oss.github.io/ClassPoll-2.0/)（`index.html`）。
 
-- `admin.html`：統一儀表板、各模組入口、教室角色管理、教室稽核、加密備份、名冊復原。
-- `teacher.html`：保留教室、出席、題庫、即時測驗和 Excel/CSV 匯出；新增原子化 CSV 名冊匯入及課堂問答管理。
-- `student.html`：保留原有匿名入班、限時答題及斷線補同步；新增私有學生提問與教師回覆檢視。
-- `supabase/09_platform_core.sql` / `10_classroom_qna.sql`：資料庫層權限、原子匯入、安全備份／安全還原及問答限流，已於正式 Supabase 安裝並通過遷移後的權限檢查；真實多帳號端到端與負載測試仍屬後續驗收。
-- `scripts/test-platform.mjs`、`tests/platform-ui.spec.mjs` 與 `tests/db-platform-integration.sql`：單元、真實 Chromium 介面、獨立 PostgreSQL RLS / 業務規則整合測試。
+所有功能共用一個校園入口與側邊選單：
 
-**正式上線條件與資料還原限制**：請參閱 [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md)。加密快照含歷史作答供保存，但頁面上的還原僅重建新教室與新名冊及新入班碼；要還原原本成績、選票和 Auth，仍需經驗證的 Supabase 全庫備份／PITR。**本系統不能承諾零 BUG。**
+| 使用身分 | 驗證方式 | 入口及權限 |
+|---|---|---|
+| 教師／教室擁有者 | Supabase Auth 電子郵件與密碼 + `cp2_teachers` 白名單 | 統一儀表板、教室、學生、出席、題庫、測驗、課堂問答、報表、稽核、備份及校園表決 |
+| 教師白名單內的受授權協作助理 | 同上；個別教室由 owner 授予 `assistant` | 統一後台可檢視授權教室，**目前為唯讀**，不具改寫名冊／題目能力 |
+| 教師白名單內的受授權稽核員 | 同上；個別教室由 owner 授予 `auditor` | 統一後台可檢視授權教室與操作紀錄，**目前為唯讀** |
+| 學生 | 教室代碼 + 學號 + 個人入班碼；成功後綁定 Supabase Anonymous Auth 工作階段 | 同一入口進入「我的課堂」及符合資格的班級／組織表決 |
+| Supabase 專案管理員 | Supabase Dashboard 管理者資格（**不是前端平台角色**） | 建立教師 Auth、授權白名單、執行 SQL 遷移、管理備份與平台安全 |
 
-## 正式表決模組（2026-10）
+**重要**：介面採用「同一頂層頁面 + 同源嵌入模組」保留既有課堂和表決功能，各模組的 Supabase 工作階段由同一角色共用；**不是校方 SSO**。舊的 `teacher.html`、`student.html`、`admin.html`、`ballots.html`、`vote.html` 仍可單獨開啟，以確保原先的 QR Code／收藏網址相容。
 
-ClassPoll 2.0 額外提供適合班級、社團與校園組織的**正式表決模組**，與原本課堂測驗功能分開：
+## 2. 教師操作教學
 
-- [表決管理員入口](ballots.html) — 建立、編輯草稿，啟用時凍結資格名冊，單選／複選／表決制，自訂時程與最低公開票數，結束後匯出彙總結果。
-- [學生正式投票入口](vote.html) — 使用現有學生名冊驗證，提交一次不可更改的選票並取得收件憑證。
-- [安全架構、部署、操作及限制](GOVERNANCE_BALLOTS.md) — 說明 RLS、RPC、角色隔離、非密碼學秘密票，以及不適用於政府公職選舉的限制。
+1. 開啟首頁，選「教師／管理人員」，輸入已核准的 Email、密碼登入。
+2. **平台總覽**：顯示擁有及獲授權的教室、有效學生數、今日出席、題數和近期錯誤。
+3. **教室管理**：設定教室名稱及 4–12 碼英數教室代碼，建立後可以啟用或停用。
+4. **學生與出席**：單筆新增或匯入 `學號,姓名` 的 UTF-8 CSV（支援含逗號的引號欄位，每次最多 200 人）。整批匯入採**交易原子性**：有重複或錯誤時整批取消；新增時產生一次顯示的個人入班碼，應立即匯出並安全分送。
+5. **教學題庫**：建立題目、分類、選項、正確答案及配分；必要時編修或刪除。
+6. **即時課堂測驗**：自行出題或從題庫帶入，設定時限、正解及是否允許修改答案。發布後學生能在同一工作台作答；教師可看作答進度與結束題目。
+7. **課堂提問**：學生入班後可私人提問；教師可逐題回覆或封存，並查看更新紀錄。
+8. **學習分析與報表**：匯出成績、逐題作答及出席表；優先 `.xlsx`，CDN 的 Excel 元件不可用時回退 CSV。若查詢超過分頁上限會明確報錯，避免誤用截斷結果。
+9. **稽核與備份**：在平台總覽查看管理操作，使用 AES-256-GCM 密碼加密匯出班級快照。前端「還原」僅能創建新教室及新入班碼，**不會重建舊成績、舊選票或原始 Auth 身分**。
+10. **權限管理**：教室擁有者可向已列入 `cp2_teachers` 的其他教師授權唯讀助理／稽核員，並可撤銷；不可越權存取別人的教室。
+11. **校園表決**：單選、複選、議案表決是獨立模組；不得視為具政府公職選舉認證的平台（詳見 `GOVERNANCE_BALLOTS.md`）。
 
-既有專案新增正式表決功能應執行 `supabase/07_governance_ballots.sql` 及 `supabase/08_ballot_draft_update.sql`。原本 `01_install.sql` 為課堂測驗基礎安裝，兩套表決資料表彼此獨立。
+## 3. 學生操作教學
 
-**本模組不能宣稱「零 BUG」或政府選務認證。** 敏感正式選舉仍需校方 SSO、多因子驗證、獨立程式碼審查、滲透測試與密碼學選票驗證能力。
+1. 開啟首頁並選「學生」。
+2. 輸入教師提供的教室代碼、名冊學號和每人專屬入班碼，完成資料庫核驗。
+3. 進入**我的課堂**，查看正在進行的題目並按期限作答；答題提交由 Supabase RPC 驗證。題目結束或網路短暫斷線後會補同步。
+4. 在課堂提問區提出問題並查看教師回覆；請勿分享個人入班碼。
+5. 若該教室有已啟用的正式表決，可從工作台進入表決模組。僅凍結資格名冊內的學生可投票。
+6. 更換裝置或清除瀏覽器工作階段後可能無法恢復匿名 Auth 身分，請教師重新簽發入班碼。**此入班碼驗證不等於學籍系統或校方 SSO 的強身分驗證。**
 
-## 你要找的 Supabase API 位置
+## 4. 整體系統架構
 
-**`js/config.js`** 是唯一放置前端 Supabase API 連線資訊的檔案：
-
-```js
-export const SUPABASE_URL = 'https://YOUR-PROJECT.supabase.co';
-export const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_REPLACE_ME';
+```mermaid
+flowchart TD
+ A["學生／教師瀏覽器"] --> B["龍華科技大學主題單一入口 index.html"]
+ B --> C{"登入身分"}
+ C -->|教師| D["Supabase Auth Email + 教師白名單"]
+ C -->|學生| E["匿名 Auth + 教室代碼／學號／個人入班碼"]
+ D --> F["統一模組工作台"]
+ E --> F
+ F --> G["教室與出席／題庫／即時測驗／問答"]
+ F --> H["報表／加密備份／權限管理"]
+ F --> I["組織表決模組"]
+ G --> J["Supabase PostgREST RPC / RLS"]
+ H --> J
+ I --> J
+ J --> K[("PostgreSQL cp2_*")]
+ J --> L["Supabase Realtime"]
 ```
 
-Supabase Dashboard → **Connect** 或 **Project Settings → API Keys** 複製 Project URL 和 **Publishable key (`sb_publishable_…`)**。
+- **前端**：`index.html` + `js/portal.js` + `assets/campus.css`；模組內頁仍維持各自的 HTML／JS，但在統一工作台內不顯示重複的外層選單。
+- **資料庫**：`cp2_rooms`、`cp2_students`、`cp2_attendance`、`cp2_bank`、`cp2_questions`、`cp2_answer_keys`、`cp2_votes`、`cp2_audit`、`cp2_errors`、`cp2_teachers`、`cp2_room_roles`、`cp2_inquiries` 與 `cp2_ballot_*`。
+- **授權**：`private` schema 的 `SECURITY DEFINER` 函式先檢查 Auth、教室擁有權、學生身分；公開的受控 RPC 提供前端操作。敏感名冊驗證及個別表決內容不得直接開放。
+- **即時性**：Realtime 用於通知資料變更；學生／教師端另有定期重新讀取，避免漏掉事件。
+- **備份**：班級快照由授權教師讀取，於瀏覽器以 Web Crypto PBKDF2 + AES-256-GCM 加密後下載；不取代整庫 PITR 或災難復原。
 
-**嚴禁**把 `sb_secret_…`、`service_role`、資料庫連線密碼放進 JavaScript、GitHub 儲存庫或學生能看到的檔案。前端 Publishable key 是公開資料，實際授權完全依賴 RLS。
-
-請參考 [`SUPABASE_SETUP.md`](SUPABASE_SETUP.md) 的完整安裝步驟。
-
-## 專案目錄
+## 5. 軟體目錄與資料庫 SQL
 
 ```text
-classpoll-2/
-├── index.html                   共用入口
-├── teacher.html                 教師控制台
-├── student.html                 學生手機版答題介面
-├── assets/style.css             共用 RWD 設計系統
+ClassPoll-2.0/
+├── index.html                  龍華校園主題登入、單一工作台
+├── admin.html                  校園整體管理模組
+├── teacher.html                教室、學生、題庫、測驗、報表
+├── student.html                課堂作答與提問
+├── ballots.html / vote.html    組織表決模組
+├── assets/                     校園主題、嵌入樣式及既有 RWD
 ├── js/
-│   ├── config.js                ★ Supabase URL + Publishable Key 填這裡
-│   ├── common.js                共用 API、輸出、錯誤追蹤
-│   ├── teacher.js               教師權限/題庫/投票/分析
-│   └── student.js               匿名驗證/綁定/斷線重同步
+│   ├── config.js               公開 Supabase URL 和 Publishable Key
+│   ├── portal.js               單一入口、共用身分與模組路由
+│   ├── embedded.js             模組嵌入外觀
+│   ├── common.js               API、報表及安全共用邏輯
+│   └── teacher.js,student.js,platform.js,ballots.js,vote.js...
 ├── supabase/
-│   ├── 01_install.sql           資料表/索引/RLS/安全函式/Realtime
-│   └── 02_grant_teacher.sql     ★ 管理員授予教師權限
-├── SUPABASE_SETUP.md            安裝與部署教學
-└── TESTING.md                   驗收檢查與安全限制
+│   ├── 01_install.sql          教學系統底層資料表、RLS、RPC
+│   ├── 02_grant_teacher.sql    教師白名單授權範例
+│   ├── 03–06_*.sql             既有系統增量安全／效能修補
+│   ├── 07_governance_ballots.sql
+│   ├── 08_ballot_draft_update.sql
+│   ├── 09_platform_core.sql
+│   └── 10_classroom_qna.sql
+├── tests/                      Playwright 與 PostgreSQL 整合測試
+├── .github/workflows/          品質、瀏覽器、資料庫、Pages 驗收
+├── LHU_SERVER_DEPLOYMENT.md    校內主機與資料庫搬遷完整手冊
+└── README.md
 ```
 
-## 已實作功能（非模擬展示）
+## 6. Supabase 新安裝及權限配置
 
-- P0：教師身分由 `cp2_teachers` 白名單管理，教師操作依資料庫政策限制於所管理教室。
-- P0：學生必須先由教師建立於名冊，利用 128-bit 隨機個人入班碼加入（資料庫僅儲存 SHA-256 雜湊）。學生匿名 Supabase Auth ID 與學生名冊記錄綁定；重新發碼由教師操作。
-- P0：投票寫入透過經伺服器核對身分、教室、截止時間及題目狀態的 SQL RPC。資料庫 `(question_id, student_id)` 唯一鍵防止重複寫入；教師可設定是否容許修改已提交答案。
-- P0：Realtime 訂閱 + 學生每 15 秒補同步 + 教師每 20 秒補同步 + 視窗重新顯示 / 上線事件重新讀取；提交後再查資料庫確認。
-- P1：教師首頁儀表板、投票分布圖、教室新增與停用、複製教室連結與 QR Code。
-- P1：單筆或批次建立學生、一次性產生私密入班碼、停用/重新簽發入班碼、出席紀錄、近兩分鐘在線狀態。
-- P1：題庫 CRUD、題目分類、標準答案、配分、30 秒等限時測驗（最高 7200 秒）、逐題發布/結束。
-- P2：歷史題目與學生分數、逐題答對率、完整作答明細、出席/個人入班碼匯出 Excel（CDN 可用時 `.xlsx`；不可用則 `.csv`）。
-- P2：功能模組化、UI 自適應桌機與手機、教師操作稽核、限流的前端錯誤摘要回報。
+**從全新 Supabase Project 安裝**：
 
-## 安裝速覽
+1. 建立專案並妥善保存專案名稱、Region、管理者和備份策略。
+2. SQL Editor 執行 `supabase/01_install.sql`（建置基礎表、Policies、函式、Realtime）。
+3. 依底層 SQL 的實際版本檢查及執行必要的 `03–06` 增量修補，避免覆蓋新版本已修正的同名函式。可獨立檢查 `04_performance_indexes.sql` 的 FK 索引。
+4. 依序執行 `07_governance_ballots.sql`、`08_ballot_draft_update.sql`、`09_platform_core.sql`、`10_classroom_qna.sql`，確認沒有錯誤。
+5. Auth 啟用教師 Email/Password 與學生 Anonymous Sign-Ins，設定密碼政策與外洩密碼防護；教師 MFA 及校方 SSO 需另行實作／核准。
+6. Authentication → Users 建立教師 Auth 帳號，執行 `02_grant_teacher.sql`（把 SQL 範例中 Email 換成真實帳號），確認 `cp2_teachers` 白名單。
+7. `js/config.js` 僅填入新的 Supabase Project URL 和 `sb_publishable_...`；**不要在靜態網站放入 `sb_secret_`、`service_role`、資料庫密碼**。
+8. 以實際教師／學生帳號測試登入、RLS、建立教室、題目、問答和備份；核對安全顧問警告再上線。
 
-1. 在你自己的 Supabase 專案打開 **SQL Editor**，執行 `supabase/01_install.sql`。
-2. Authentication → Providers → **Email**：允許教師電子郵件/密碼登入；Authentication → Providers → **Anonymous Sign-Ins**：開啟學生匿名登入（位置可能隨 Dashboard 版本而異）。
-3. Authentication → Users：建立教師 Email/Password 帳號。編輯 `supabase/02_grant_teacher.sql` 內的教師信箱，在 SQL Editor 執行，並確認最後的 SELECT 有一筆。
-4. 編輯 `js/config.js`，填入 Supabase Project URL / Publishable key。**不要使用 Secret Key**。
-5. 將整個資料夾的**內容**上傳至 GitHub 儲存庫根目錄，在 Settings → Pages → `Deploy from a branch` → `main` / `(root)` 開啟網站。
-6. 進教師端登入 → 建立教室 → 建立學生名冊 → 匯出並安全發放入班碼 → 建立/發布題目 → 學生完成作答。
+**已有正式資料庫升級**：不要重新執行 `01_install.sql` 或將既有 `cp2_*` 清空。先完整備份，使用 `supabase_migrations` 及 schema diff 核對已套用遷移，只對尚未安裝的內容升級。
 
-本機瀏覽開發版：進入專案資料夾，執行 `python -m http.server 8000`，開啟 `http://localhost:8000`。不要直接用 `file://`，ES Modules 可能受瀏覽器安全限制。
+## 7. 搬到龍華科技大學伺服器
 
-## 與你原始專案的關係
+有兩種不同部署模式：
 
-原始專案 `teacher0001` 與 `lll` 的 HTML 已經使用相同 Supabase Project，但沒有一致完整的使用者驗證模型。本次提供的是**完整重建的 ClassPoll 2.0**，並非只把兩頁 iframe 串在一起。為了**避免覆蓋原有資料**，新系統會建立全新 `cp2_*` 資料表。原始的 `classrooms`, `questions`, `votes` **不會自動匯入**；若要遷移舊資料，需要進一步根據舊資料表結構及清洗結果建立遷移程式，請先備份。
+**模式 A（建議先採用）— 校內只託管前端**：由龍華科技大學管理的 HTTPS 伺服器部署全部靜態檔案，前端沿用既有 Supabase 專案；必須核對校方資料處理、資安與個資規範。需要設定 URL、HTTPS、Auth Site URL／允許來源及 CORS；**不能以為更換網頁主機就代表資料已儲存在校內**。
 
-## 技術注意事項
+**模式 B — 前端、Auth、API、Realtime、PostgreSQL 全部自建校內**：必須部署完整 Supabase 相容服務與金鑰管理，透過具權限的 DBA 移轉資料庫與 Auth 身分、重新驗證 RLS、RPC、Realtime、備份及 TLS。**只複製 PostgreSQL 表格並不能讓這套系統運作**。需校方網路／系統／資安單位評估、驗證資料切換及復原方案。
 
-- GitHub Pages 是靜態託管；安全函式、唯一限制及所有 RLS 都在 Supabase PostgreSQL 執行。
-- `teacher` 與 `student` 各自使用獨立 Supabase Auth localStorage key，避免同一網站上的兩種身分互相覆寫。
-- 參與必須持有個人入班碼；這提高冒用門檻，但**仍不等同校方 SSO 學生身分驗證**。如果學生主動洩露邀請碼，尚未綁定時可能被別人搶先使用。正式記分或學校成績建議改接校方 SSO / 正式帳號驗證。
-- 清除瀏覽器資料 / 換裝置將失去學生匿名登入身分；教師可透過「重設入班碼」重新簽發代碼，已儲存的票數與分數保留。
-- Realtime 並不保證每個事件 100% 到達，因此以週期補讀資料庫作為最終一致性的保障。
-- 教師必須妥善保存 `.xlsx/.csv` 裡的個人入班碼；匯出檔為敏感資料，請勿放進公開 GitHub。
-- 重要故障與權限錯誤應透過 Supabase Dashboard 的 Database Logs / Auth Logs 追蹤；系統內建的錯誤摘要僅供輔助，不能代替專業 APM。
+詳見 **[LHU_SERVER_DEPLOYMENT.md](LHU_SERVER_DEPLOYMENT.md)**，包含 Nginx、HTTPS、資料庫備份、遷移順序、驗收、回退與校方維運交接。
 
-## 官方參考資料
+## 8. 本機運行、測試與正式驗收
 
-- [Supabase RLS](https://supabase.com/docs/guides/database/postgres/row-level-security)
-- [Supabase Anonymous Sign-ins](https://supabase.com/docs/guides/auth/auth-anonymous)
-- [Supabase API Keys](https://supabase.com/docs/guides/getting-started/api-keys)
-- [Supabase Realtime / Postgres Changes](https://supabase.com/docs/guides/realtime/subscribing-to-database-changes)
+```bash
+python3 -m http.server 8000
+# 開啟 http://127.0.0.1:8000/
+npm install
+npm run test:unit
+npx playwright install chromium
+npm run test:ui
+```
+
+GitHub Actions：`ClassPoll quality checks`、`ClassPoll browser acceptance`、`ClassPoll isolated database integration` 及正式站 Smoke Test。資料庫 CI 使用隔離 PostgreSQL，不會把 QA 教室寫入正式 Supabase。
+
+**品質聲明**：自動測試、隔離 SQL 交易、GitHub Pages 可用性檢查能降低風險，但無法證明零 BUG、全校規模效能或校方資安審核完成。應持續監看真實 Auth 登入、端到端流程、API 限流、備份可復原性及資安告警。
+
+## 9. 資安、法遵和重要限制
+
+- 對實際學生資料應遵循龍華科技大學管理辦法、臺灣《個人資料保護法》、權責核准及資料留存要求。
+- 現行學生使用匿名 Auth + 入班碼，並非校方 SSO 學籍驗證。正式成績、重大自治表決或跨校資料使用前須完成強身分、MFA 與稽核評估。
+- 教師的密碼、學生入班碼及加密備份密碼不得傳到 GitHub、Email 群組、瀏覽器 Console 或客服紀錄。
+- 校園組織表決模組無政府公職選舉認證，也不是密碼學端到端可驗證選票。
+- 完整資料庫備份與恢復應交由校方 DBA 使用 Supabase 官方備份／PITR 或經驗證的 PostgreSQL 遷移方式。
+
+其他手冊：[SUPABASE_SETUP.md](SUPABASE_SETUP.md) · [GOVERNANCE_BALLOTS.md](GOVERNANCE_BALLOTS.md) · [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md)。

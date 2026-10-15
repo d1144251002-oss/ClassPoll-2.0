@@ -21,7 +21,7 @@ jobs:
         run: |
           set -euo pipefail
           root="https://d1144251002-oss.github.io/ClassPoll-2.0"
-          for endpoint in "/" "/teacher.html" "/student.html" "/ballots.html" "/vote.html" "/admin.html" "/assets/platform.css" "/assets/ballots.css" "/js/platform.js" "/js/platform-utils.js" "/js/common.js" "/js/teacher.js" "/js/student.js" "/js/ballots.js" "/js/vote.js"; do
+          for endpoint in "/" "/teacher.html" "/student.html" "/ballots.html" "/vote.html" "/admin.html" "/assets/campus.css" "/assets/embed.css" "/js/portal.js" "/js/embedded.js" "/assets/platform.css" "/assets/ballots.css" "/js/platform.js" "/js/platform-utils.js" "/js/common.js" "/js/teacher.js" "/js/student.js" "/js/ballots.js" "/js/vote.js"; do
             echo "Checking ${root}${endpoint}"
             curl --fail --silent --show-error --location --retry 30 --retry-all-errors --retry-delay 5 --max-time 25 "${root}${endpoint}" -o /tmp/classpoll-smoke-body
             test -s /tmp/classpoll-smoke-body
@@ -42,4 +42,9 @@ jobs:
           grep -q "qnaForm" /tmp/classpoll-student.html
           curl --fail --silent --show-error --location --max-time 25 "${root}/teacher.html" -o /tmp/classpoll-teacher.html
           grep -q "tab-qna" /tmp/classpoll-teacher.html
+          curl --fail --silent --show-error --location --max-time 25 "${root}/index.html" -o /tmp/classpoll-campus-home.html
+          grep -q "龍華科技大學" /tmp/classpoll-campus-home.html
+          grep -q "teacherLogin" /tmp/classpoll-campus-home.html
+          grep -q "studentLogin" /tmp/classpoll-campus-home.html
+          grep -q "moduleFrame" /tmp/classpoll-campus-home.html
           echo "Live GitHub Pages endpoints available."

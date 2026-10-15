@@ -9,7 +9,7 @@ function assert(condition, message) {
 const read = (file) => fs.readFileSync(file, 'utf8');
 const present = (file) => fs.existsSync(file) && fs.statSync(file).isFile();
 const required = [
-  'index.html', 'teacher.html', 'student.html', 'ballots.html', 'vote.html', 'admin.html',
+  'index.html', 'assets/campus.css', 'assets/embed.css', 'js/portal.js', 'js/embedded.js', 'teacher.html', 'student.html', 'ballots.html', 'vote.html', 'admin.html',
   'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js', 'js/ballots.js', 'js/vote.js', 'js/platform.js', 'js/platform-utils.js',
   'assets/style.css', 'assets/ballots.css', 'assets/platform.css', 'supabase/01_install.sql', 'supabase/07_governance_ballots.sql', 'supabase/09_platform_core.sql', 'supabase/10_classroom_qna.sql',
   'supabase/02_grant_teacher.sql', 'supabase/03_fix_rooms_rls.sql',
@@ -42,7 +42,7 @@ for (const pageName of ['teacher', 'student', 'ballots', 'vote', 'admin']) {
   assert(html.includes('src="js/' + entry + '.js"'), 'Missing module in ' + pageName);
   assert(html.includes('@supabase/supabase-js@2'), 'Missing Supabase SDK in ' + pageName);
 }
-for (const name of ['common', 'teacher', 'student', 'ballots', 'vote', 'platform', 'platform-utils']) {
+for (const name of ['common', 'portal', 'embedded', 'teacher', 'student', 'ballots', 'vote', 'platform', 'platform-utils']) {
   for (const match of read('js/' + name + '.js').matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
     const filename = path.normalize(path.join('js', match[1]));
     assert(present(filename), 'Unresolved import in ' + name + ': ' + match[1]);
@@ -98,3 +98,21 @@ assert(qna.includes("interval '1 hour'"), 'Q&A posting rate limit required');
 assert(read('student.html').includes('qnaForm'), 'Student Q&A form missing');
 assert(read('teacher.html').includes('tab-qna'), 'Teacher Q&A panel missing');
 console.log('Classroom Q&A static controls passed.');
+
+const unifiedPortal=read('index.html');
+const portalJs=read('js/portal.js');
+assert(unifiedPortal.includes('龍華科技大學'), 'Campus portal must identify Lunghwa University');
+assert(unifiedPortal.includes('teacherLogin') && unifiedPortal.includes('studentLogin'), 'Both campus roles need login');
+assert(unifiedPortal.includes('moduleNav') && unifiedPortal.includes('moduleFrame'), 'One shared module workspace required');
+assert(unifiedPortal.includes('src="js/portal.js"'), 'University portal JavaScript must be loaded');
+assert(unifiedPortal.includes('assets/campus.css'), 'University theme stylesheet required');
+assert(portalJs.includes("cp2_teachers"), 'Teacher authorization must be server verified');
+assert(portalJs.includes("cp2_join"), 'Student roster must be verified by RPC');
+assert(portalJs.includes('allowedTeacher') && portalJs.includes('allowedStudent'), 'Navigation must be role scoped');
+assert(!/驗收版|開發分支|測試版本/.test(unifiedPortal), 'Public login cannot show development or test banners');
+for(const entry of ['admin','teacher','student','ballots','vote']){
+ const page=read(entry+'.html');
+ assert(page.includes('js/embedded.js'), 'Missing embedded shell support in '+entry);
+ assert(!/正式功能開發分支|驗收版/.test(page),'Unreleased label in '+entry);
+}
+console.log('LHU unified portal identity, SSO and module integrity checks passed.');
