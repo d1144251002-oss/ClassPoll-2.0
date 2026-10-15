@@ -148,8 +148,12 @@ do $$ declare r record; begin
  end loop;
 end $$;
 create policy cp2_teachers_self on public.cp2_teachers for select to authenticated using (user_id=(select auth.uid()));
+-- Check ownership against the row directly. An INSERT ... RETURNING statement
+-- cannot reliably see its just-inserted row through a self-querying STABLE
+-- SECURITY DEFINER helper (private.cp2_owns), and may fail the SELECT RLS check.
 create policy cp2_rooms_read on public.cp2_rooms for select to authenticated
- using (private.cp2_owns(id) or private.cp2_member(id));
+ using ((owner_id=(select auth.uid()) and (select private.cp2_is_teacher()))
+        or private.cp2_member(id));
 create policy cp2_rooms_insert on public.cp2_rooms for insert to authenticated
  with check(owner_id=(select auth.uid()) and (select private.cp2_is_teacher()));
 create policy cp2_rooms_update on public.cp2_rooms for update to authenticated
