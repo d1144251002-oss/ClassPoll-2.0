@@ -42,4 +42,9 @@ jobs:
           grep -q "qnaForm" /tmp/classpoll-student.html
           curl --fail --silent --show-error --location --max-time 25 "${root}/teacher.html" -o /tmp/classpoll-teacher.html
           grep -q "tab-qna" /tmp/classpoll-teacher.html
+          curl --fail --silent --show-error --location --max-time 25 "${root}/index.html" -o /tmp/classpoll-campus-home.html
+          grep -q "龍華科技大學" /tmp/classpoll-campus-home.html
+          grep -q "teacherLogin" /tmp/classpoll-campus-home.html
+          grep -q "studentLogin" /tmp/classpoll-campus-home.html
+          grep -q "moduleFrame" /tmp/classpoll-campus-home.html
           echo "Live GitHub Pages endpoints available."
