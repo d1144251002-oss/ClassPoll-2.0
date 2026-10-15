@@ -66,3 +66,22 @@ test('mobile platform dashboard stays within the viewport',async({page})=>{
  const width=await page.evaluate(()=>document.documentElement.scrollWidth);
  expect(width).toBeLessThanOrEqual(392);
 });
+
+test('admin logout removes sensitive classroom dashboard data from document',async({page})=>{
+ await mockSupabase(page);await page.goto('/admin.html');
+ await expect(page.locator('#roomRows')).toContainText('資料結構測試班');
+ await page.locator('#logoutButton').click();
+ await expect(page.locator('#loginGate')).toBeVisible();
+ await expect(page.locator('#roomRows')).not.toContainText('資料結構測試班');
+ await expect(page.locator('#roomTotal')).toHaveText('0');
+ await expect(page.locator('#roleRoom option')).toHaveCount(0);
+});
+test('teacher logout clears student private history and any transient session UI',async({page})=>{
+ await mockSupabase(page);await page.goto('/teacher.html');
+ await page.locator('button[data-tab="qna"]').click();
+ await expect(page.locator('#qnaList')).toContainText('資料結構是什麼？');
+ await page.locator('#signoutBtn').click();
+ await expect(page.locator('#authGate')).toBeVisible();
+ await expect(page.locator('#qnaList')).not.toContainText('資料結構是什麼？');
+ await expect(page.locator('#studentRows')).not.toContainText('王同學');
+});
