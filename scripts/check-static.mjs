@@ -30,7 +30,8 @@ for (const pageName of ['index', 'teacher', 'student', 'ballots', 'vote', 'admin
 }
 for (const pageName of ['teacher', 'student', 'ballots', 'vote', 'admin']) {
   const html = read(pageName + '.html');
-  const script = read('js/' + pageName + '.js');
+  const entry = pageName === 'admin' ? 'platform' : pageName;
+  const script = read('js/' + entry + '.js');
   const common = read('js/common.js');
   const ids = new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(match => match[1]));
   for (const file of [script, common]) {
@@ -38,10 +39,10 @@ for (const pageName of ['teacher', 'student', 'ballots', 'vote', 'admin']) {
       assert(ids.has(match[1]), pageName + '.html missing element id: ' + match[1]);
     }
   }
-  assert(html.includes('src="js/' + pageName + '.js"'), 'Missing module in ' + pageName);
+  assert(html.includes('src="js/' + entry + '.js"'), 'Missing module in ' + pageName);
   assert(html.includes('@supabase/supabase-js@2'), 'Missing Supabase SDK in ' + pageName);
 }
-for (const name of ['common', 'teacher', 'student', 'ballots', 'vote', 'admin', 'platform', 'platform-utils']) {
+for (const name of ['common', 'teacher', 'student', 'ballots', 'vote', 'platform', 'platform-utils']) {
   for (const match of read('js/' + name + '.js').matchAll(/from\s+['"](\.[^'"]+)['"]/g)) {
     const filename = path.normalize(path.join('js', match[1]));
     assert(present(filename), 'Unresolved import in ' + name + ': ' + match[1]);
