@@ -136,7 +136,8 @@ function renderOverview(){
  txt('mRooms',rooms.length);txt('mStudents',students.filter(s=>s.is_active).length);
  txt('mAttendance',attendance.filter(a=>a.attended_on===today()).length);
  const liveVotes=active?participantVotes(active.id):[];
- txt('mRate',active&&students.length?Math.round(liveVotes.length/students.filter(s=>s.is_active).length*100)+'%':'—');
+ const activeStudents=students.filter(s=>s.is_active).length;
+ txt('mRate',active&&activeStudents>0?Math.round(liveVotes.length/activeStudents*100)+'%':'—');
  txt('mRateSub',active?`${liveVotes.length} 位學生已作答`:'等待題目發布');
  txt('overviewQuestion',active?.prompt||'目前沒有正在作答的題目');
  txt('overviewRoom',room?.title||'請先建立教室');txt('overviewRoomCode',room?`教室代碼：${room.code}`:'—');
