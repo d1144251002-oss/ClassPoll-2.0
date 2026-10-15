@@ -2,12 +2,23 @@ import {$,txt,show,escapeHtml,toast,failure,setBusy,fmtDate,asOptions,client,que
 
 let db=null, user=null, authorized=false, tab='overview', roomId='', room=null, active=null;
 let rooms=[],students=[],attendance=[],bank=[],questions=[],keys=[],votes=[],audit=[],errors=[],codes=[],inquiries=[];
+const issuedCodesByRoom=new Map();
 let voteChannel=null,questionChannel=null, chartLive=null,chartPoll=null,chartAccuracy=null;
 let interval=null,refreshing=false,requestGen=0;
 import {parseRosterCSV} from './platform-utils.js';
 const today=taipeiToday;
 const esc=escapeHtml;
 const byId=(xs,id)=>xs.find(x=>x.id===id);
+function showIssuedForRoom(){
+ codes=issuedCodesByRoom.get(roomId)||[];
+ renderCodes();
+}
+function recordIssuedCodes(sourceRoomId,entries){
+ const list=issuedCodesByRoom.get(sourceRoomId)||[];
+ list.push(...entries);
+ issuedCodesByRoom.set(sourceRoomId,list);
+ if(roomId===sourceRoomId)showIssuedForRoom();
+}
 const isOnline=(s)=>s.last_seen && (Date.now()-new Date(s.last_seen).getTime())<120000;
 const participantVotes=(qid)=>votes.filter(x=>x.question_id===qid);
 const truth=(q)=>keys.find(k=>k.question_id===q.id)?.correct_index;
@@ -43,6 +54,7 @@ async function onLogin(ev){ev.preventDefault();if(!db)return;const b=$('loginBtn
 function clearPrivateState(){
  authorized=false;user=null;roomId='';room=null;active=null;
  rooms=[];students=[];attendance=[];bank=[];questions=[];keys=[];votes=[];audit=[];errors=[];codes=[];inquiries=[];
+ issuedCodesByRoom.clear();
  requestGen++;renderCodes();$('password').value='';
  authUI();
 }
@@ -80,7 +92,7 @@ async function refreshAll(){
  if(!authorized||refreshing)return;refreshing=true;
  try{
    rooms=await getAll('cp2_rooms',null,'created_at');bank=await getAll('cp2_bank',null,'created_at');
-   if(!roomId || !rooms.some(r=>r.id===roomId))roomId=rooms[0]?.id||'';
+   if(!roomId || !rooms.some(r=>r.id===roomId)){roomId=rooms[0]?.id||'';showIssuedForRoom();}
    renderRoomSelector();renderRooms();renderBank();await refreshRoom();
  }catch(e){failure(e,'同步管理資料失敗');}finally{refreshing=false;}
 }
@@ -266,12 +278,12 @@ async function bulkImport(){
   const roomForImport=rooms.find(r=>r.id===originalRoom);
   // Issued credentials are transient; no access hash is ever stored on the client.
   const newCodes=created.map(item=>({教室代碼:roomForImport?.code||'',學號:item.student_no,姓名:item.display_name,個人入班碼:item.access_code}));
+  recordIssuedCodes(originalRoom,newCodes);
   if(roomId===originalRoom){
-   codes.push(...newCodes);renderCodes();$('bulkRoster').value='';
+   $('bulkRoster').value='';
    await refreshRoom();
   }else{
-   // Preserve issuance in memory even if the teacher changed the displayed room.
-   codes.push(...newCodes);toast('名冊匯入成功，但你已切換教室；請立即匯出新發放的入班碼',true);
+   toast('名冊匯入成功。切回原教室後可安全匯出新發放的入班碼',true);
   }
   toast('已安全新增 '+created.length+' 位學生，請立即匯出入班碼');
  }catch(e){failure(e,'整批匯入取消，未新增任何學生');}
@@ -279,7 +291,7 @@ async function bulkImport(){
 }
 async function createStudent(ev){ev.preventDefault();if(!roomId)return toast('請先選擇教室',true);const b=ev.submitter;setBusy(b,true);
  try{const no=$('studentNumber').value.trim(),name=$('studentName').value.trim();const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});const entry=result?.[0];if(!entry)throw Error('未取得新學生入班碼');
- codes.push({教室代碼:room.code,學號:no,姓名:name,個人入班碼:entry.access_code});renderCodes();$('studentForm').reset();await refreshRoom();toast('學生已新增，請儲存並安全發放入班碼');
+ recordIssuedCodes(roomId,[{教室代碼:room.code,學號:no,姓名:name,個人入班碼:entry.access_code}]);$('studentForm').reset();await refreshRoom();toast('學生已新增，請儲存並安全發放入班碼');
  }catch(e){failure(e,'新增學生失敗');}finally{setBusy(b,false);}}
 function renderCodes(){
  show('issuedCodes',codes.length>0);
@@ -325,12 +337,12 @@ async function handleActions(ev){const b=ev.target.closest('[data-act]');if(!b)r
   if(!window.confirm('封存後無法再回覆，確定嗎？'))return;
   await rpc(db,'cp2_qna_archive',{p_question:id});await refreshQna();toast('提問已封存');
  }
- if(act==='chooseRoom'){roomId=id;codes=[];renderCodes();await refreshRoom();activateTab('overview');}
+ if(act==='chooseRoom'){roomId=id;showIssuedForRoom();await refreshRoom();activateTab('overview');}
  if(act==='toggleRoom'){const r=byId(rooms,id);if(!confirm(`確定要${r.is_active?'停用':'啟用'}教室 ${r.title}？`))return;await query(db.from('cp2_rooms').update({is_active:!r.is_active}).eq('id',id));await refreshAll();}
  if(act==='resetStudent'){const s=byId(students,id);
  if(!confirm(`重新簽發 ${s.display_name} 的入班碼？舊入班碼與舊裝置將立即失效，歷史成績會保留。`))return;
  const code=await rpc(db,'cp2_rotate_student',{p_student:id});
- codes.push({教室代碼:room.code,學號:s.student_no,姓名:s.display_name,個人入班碼:code});renderCodes();
+ recordIssuedCodes(roomId,[{教室代碼:room.code,學號:s.student_no,姓名:s.display_name,個人入班碼:code}]);
  await refreshRoom();toast('已重新簽發入班碼，請立即儲存並交給學生');}
  if(act==='toggleStudent'){const s=byId(students,id);if(!confirm(`確定要${s.is_active?'停用':'啟用'} ${s.display_name}？`))return;await query(db.from('cp2_students').update({is_active:!s.is_active}).eq('id',id));await refreshRoom();}
  if(act==='useBank'){loadBankToLive(byId(bank,id));}
@@ -355,7 +367,7 @@ function wire(){
  $('sideNav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)activateTab(b.dataset.tab);});
  $('menuBtn').addEventListener('click',()=>$('sidebar').classList.toggle('open'));
  document.addEventListener('click',handleActions);
- $('roomSelect').addEventListener('change',async e=>{roomId=e.target.value;codes=[];renderCodes();await refreshRoom();});
+ $('roomSelect').addEventListener('change',async e=>{roomId=e.target.value;showIssuedForRoom();await refreshRoom();});
  $('selectBank').addEventListener('change',e=>{const b=byId(bank,e.target.value);if(b)loadBankToLive(b);});
  $('refreshBtn').addEventListener('click',refreshAll);
  $('copyInvite').addEventListener('click',()=>room?navigator.clipboard.writeText(localLink('student.html',room.code)).then(()=>toast('學生連結已複製')).catch(e=>failure(e,'無法複製')):toast('請先選擇教室',true));
