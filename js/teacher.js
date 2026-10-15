@@ -1,16 +1,10 @@
-import {$,txt,show,escapeHtml,toast,failure,setBusy,fmtDate,asOptions,client,query,rpc,exportRows,localLink,guardConfig,listenReconnect,setErrorReporter} from './common.js';
+import {$,txt,show,escapeHtml,toast,failure,setBusy,fmtDate,asOptions,client,query,rpc,exportRows,localLink,guardConfig,listenReconnect,setErrorReporter,taipeiToday,activeParticipation} from './common.js';
 
 let db=null, user=null, authorized=false, tab='overview', roomId='', room=null, active=null;
 let rooms=[],students=[],attendance=[],bank=[],questions=[],keys=[],votes=[],audit=[],errors=[],codes=[];
 let voteChannel=null,questionChannel=null, chartLive=null,chartPoll=null,chartAccuracy=null;
 let interval=null,refreshing=false,requestGen=0;
-// Attendance dates are stored in Asia/Taipei by the database, regardless
-// of the teacher's browser timezone or locale formatting.
-const today=()=>{
- const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());
- const byType=Object.fromEntries(parts.map(p=>[p.type,p.value]));
- return `${byType.year}-${byType.month}-${byType.day}`;
-};
+const today=taipeiToday;
 const esc=escapeHtml;
 const byId=(xs,id)=>xs.find(x=>x.id===id);
 const isOnline=(s)=>s.last_seen && (Date.now()-new Date(s.last_seen).getTime())<120000;
@@ -156,11 +150,9 @@ function renderRooms(){
 function renderOverview(){
  txt('mRooms',rooms.length);txt('mStudents',students.filter(s=>s.is_active).length);
  txt('mAttendance',attendance.filter(a=>a.attended_on===today()).length);
- const eligible=new Set(students.filter(s=>s.is_active).map(s=>s.id));
- const liveVotes=active?participantVotes(active.id).filter(v=>eligible.has(v.student_id)):[];
- const activeStudents=eligible.size;
- txt('mRate',active&&activeStudents>0?Math.round(liveVotes.length/activeStudents*100)+'%':'—');
- txt('mRateSub',active?`${liveVotes.length} 位學生已作答`:'等待題目發布');
+ const progress=activeParticipation(students,active?participantVotes(active.id):[]);
+ txt('mRate',active&&progress.percent!==null?`${progress.percent}%`:'—');
+ txt('mRateSub',active?`${progress.count} 位學生已作答`:'等待題目發布');
  txt('overviewQuestion',active?.prompt||'目前沒有正在作答的題目');
  txt('overviewRoom',room?.title||'請先建立教室');txt('overviewRoomCode',room?`教室代碼：${room.code}`:'—');
  const box=$('overviewQr');box.innerHTML='';
@@ -189,9 +181,8 @@ function renderLive(){
  txt('liveBadge',active?'● 進行中':'● 尚無題目');
  const opts=active?asOptions(active.options):[];
  const tally=active?optionCounts(active.id,opts.length):[];
- const eligible=new Set(students.filter(s=>s.is_active).map(s=>s.id));
- const eligibleVotes=active?participantVotes(active.id).filter(v=>eligible.has(v.student_id)).length:0;
- txt('currentProgress',active?`已作答 ${eligibleVotes} / ${eligible.size} 人`:'尚無進行中的作答');
+ const progress=activeParticipation(students,active?participantVotes(active.id):[]);
+ txt('currentProgress',active?`已作答 ${progress.count} / ${progress.total} 人`:'尚無進行中的作答');
  txt('currentDeadline',active?.ends_at?'本題截止：'+fmtDate(active.ends_at):'本題無倒數限制');
  $('closeBtn').disabled=!active;
  chartPoll=barChart(chartPoll,'pollChart',opts,tally);
