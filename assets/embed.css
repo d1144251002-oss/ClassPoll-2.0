@@ -1,0 +1,12 @@
+/* The unified campus shell supplies the top navigation and module selector. */
+body.portal-embedded.app-shell .sidebar{display:none!important}
+body.portal-embedded.app-shell .app-main{margin-left:0!important;width:100%!important;min-width:0}
+body.portal-embedded.app-shell .app-header{display:none!important}
+body.portal-embedded.app-shell .page{max-width:none}
+body.portal-embedded.student-body .student-top{display:none!important}
+body.portal-embedded.student-body .student-main{margin-top:18px}
+body.portal-embedded.gov-page .gov-header{display:none!important}
+body.portal-embedded.gov-page .gov-main{padding-top:16px}
+body.portal-embedded:not(.app-shell):not(.gov-page):not(.student-body) .topbar{display:none!important}
+body.portal-embedded:not(.app-shell):not(.gov-page):not(.student-body) .main{padding-top:15px}
+body.portal-embedded:not(.app-shell):not(.gov-page):not(.student-body) .hero-tag{display:none}
