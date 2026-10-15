@@ -1,0 +1,80 @@
+name: ClassPoll 3.0 candidate acceptance
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  typed-spa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check Vue / TypeScript
+        run: npm run typecheck
+      - name: Production Vite build
+        run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run actual Vue UI browser tests
+        run: npx playwright test --config app/playwright.config.ts
+        env:
+          CI: "true"
+      - name: Assert SPA output, safe PWA policy and no iframe
+        run: |
+          test -s app/dist/index.html
+          test -s app/dist/sw.js
+          grep -q "app-icon.svg" app/dist/manifest.webmanifest
+          ! grep -R --include='*.vue' '<iframe' app/src/
+          ! grep -E "auth/v1|rest/v1|realtime/v1" app/public/sw.js
+      - name: Upload isolated build for review (not production)
+        uses: actions/upload-artifact@v4
+        with:
+          name: classpoll3-spa-preview
+          path: app/dist/
+          retention-days: 7
+  academic-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: classpoll3_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_only_not_production
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d classpoll3_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: classpoll3_ci
+      PGPASSWORD: ci_only_not_production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Supabase Auth and JWT test shims
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db-bootstrap.sql
+      - name: Apply legacy and new additive migration chain
+        run: |
+          set -euo pipefail
+          for file in supabase/01_install.sql supabase/07_governance_ballots.sql supabase/08_ballot_draft_update.sql supabase/09_platform_core.sql supabase/10_classroom_qna.sql supabase/11_campus_academic_rbac.sql supabase/12_academics_assessments.sql; do
+            echo "Database migration: $file"
+            psql -X -v ON_ERROR_STOP=1 -f "$file" >/dev/null
+          done
+      - name: Validate old platform continues to work
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db-platform-integration.sql
+      - name: Validate ClassPoll 3.0 RBAC and grades
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db-cp3-integration.sql
