@@ -2,6 +2,7 @@ import {$,txt,show,toast,failure,setBusy,fmtDate,asOptions,client,query,rpc,guar
 
 let db=null,authId=null,member=null,current=null,ownVote=null,questionChannel=null;
 let loading=false,pendingSync=false,sending=false,lastQuestionId=null,subscribed=false,lastSocketErrorAt=0;
+let inquiries=[],qnaBusy=false;
 const storage='classpoll-2-last-room';
 
 function setStatus(text,ok){txt('connStatus',`${ok?'●':'○'} ${text}`);$('connStatus').style.color=ok?'#08756f':'#c27c32';}
@@ -63,12 +64,50 @@ async function connected(info){
  member=info;localStorage.setItem(storage,member.room_id);
  show('joinPage',false);show('studentPage',true);
  txt('studentClass',info.room_title);txt('studentIdentity',`${info.display_name} · 已完成名冊身分驗證`);
- await startStream();await syncQuestion();await heartbeat();
+ await startStream();await syncQuestion();await syncQna();await heartbeat();
 }
 async function leave(){
- await stopStream();member=null;current=null;ownVote=null;lastQuestionId=null;pendingSync=false;
+ await stopStream();member=null;current=null;ownVote=null;lastQuestionId=null;pendingSync=false;inquiries=[];
+ $('qnaHistory').replaceChildren();
  localStorage.removeItem(storage);show('studentPage',false);show('joinPage',true);
  // Returns to admission screen without invalidating the anonymous Auth identity.
+}
+async function syncQna(){
+ if(!member||qnaBusy)return;
+ const room=member.room_id;
+ try{
+  const items=await rpc(db,'cp2_qna_list',{p_room:room,p_limit:100});
+  if(member?.room_id!==room)return;
+  inquiries=items||[];renderQna();
+ }catch(e){console.warn('課堂問答同步失敗',e);}
+}
+function renderQna(){
+ const target=$('qnaHistory');target.replaceChildren();
+ if(!inquiries.length){const empty=document.createElement('p');empty.className='muted';empty.textContent='目前尚無提問。';target.append(empty);return;}
+ for(const item of inquiries){
+  const div=document.createElement('div');div.className='list-item';
+  const wrap=document.createElement('div');
+  const prompt=document.createElement('strong');prompt.textContent=item.body;
+  const status=document.createElement('p');status.className='fine';
+  status.textContent=fmtDate(item.created_at)+' · '+(item.status==='answered'?'教師已回覆':item.status==='archived'?'已封存':'等待教師回覆');
+  wrap.append(prompt,status);
+  if(item.answer){const answer=document.createElement('p');answer.textContent='教師回覆：'+item.answer;wrap.append(answer);}
+  div.append(wrap);target.append(div);
+ }
+}
+async function submitQna(ev){
+ ev.preventDefault();
+ if(!member)return toast('請先完成入班驗證',true);
+ if(qnaBusy)return;const text=$('qnaText').value.trim();
+ if(!text||text.length>1000)return toast('問題需介於 1 至 1000 字',true);
+ qnaBusy=true;const button=$('qnaSendBtn');setBusy(button,true,'正在傳送問題…');
+ try{
+  const id=await rpc(db,'cp2_qna_post',{p_room:member.room_id,p_body:text});
+  if(!id)throw Error('伺服器未回傳問題編號');
+  $('qnaText').value='';toast('問題已送給教師');
+  await syncQna();
+ }catch(e){failure(e,'無法送出問題');}
+ finally{qnaBusy=false;setBusy(button,false);}
 }
 async function heartbeat(){
  if(!member||!db||!navigator.onLine)return;
@@ -168,8 +207,9 @@ async function sendAnswer(choice){
 window.addEventListener('load',async()=>{
  const room=new URLSearchParams(location.search).get('room');if(room)$('joinRoom').value=room;
  $('joinForm').addEventListener('submit',join);$('leaveBtn').addEventListener('click',leave);
- listenReconnect(async()=>{if(!db)return;try{db.realtime.connect();if(member){await ensureAnonymous();await startStream();await syncQuestion();await heartbeat();}}catch(e){failure(e,'重新連線失敗');}});
- setInterval(()=>{if(member&&!document.hidden){syncQuestion();heartbeat();if(!subscribed&&navigator.onLine&&(!questionChannel||(lastSocketErrorAt&&Date.now()-lastSocketErrorAt>25000)))startStream();}},15000);
+ $('qnaForm').addEventListener('submit',submitQna);
+ listenReconnect(async()=>{if(!db)return;try{db.realtime.connect();if(member){await ensureAnonymous();await startStream();await syncQuestion();await syncQna();await heartbeat();}}catch(e){failure(e,'重新連線失敗');}});
+ setInterval(()=>{if(member&&!document.hidden){syncQuestion();syncQna();heartbeat();if(!subscribed&&navigator.onLine&&(!questionChannel||(lastSocketErrorAt&&Date.now()-lastSocketErrorAt>25000)))startStream();}},15000);
  setInterval(tick,1000);
  await init();
 });
