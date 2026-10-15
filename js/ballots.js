@@ -1,6 +1,6 @@
 import {$,show,txt,escapeHtml as esc,toast,failure,setBusy,client,query,rpc,guardConfig,exportRows,localLink} from './common.js';
 
-let db=null,authorized=false,user=null,rooms=[],roomId='',ballots=[],loadedResults=[],activeResult=null,refreshing=false;
+let db=null,authorized=false,user=null,rooms=[],roomId='',ballots=[],loadedResults=[],activeResult=null,refreshing=false,editingId=null;
 const $all=(selector)=>[...document.querySelectorAll(selector)];
 function alertError(message){
   txt('errorAlert',message);show('errorAlert',Boolean(message));
@@ -90,7 +90,7 @@ function renderList(){
   const count=Number(b.cast_count),eligible=Number(b.eligible_count);
   const turnout=count>=0?(eligible?Math.round(count/eligible*100):0):null;
   const buttons=b.status==='draft'
-    ? '<button type="button" class="gov-primary" data-action="activate" data-id="'+b.id+'">啟用並凍結資格</button>'
+    ? '<button type="button" class="gov-outline" data-action="edit" data-id="'+b.id+'">編輯草稿</button><button type="button" class="gov-primary" data-action="activate" data-id="'+b.id+'">啟用並凍結資格</button>'
     : (s.style!=='closed'?'<button type="button" class="gov-outline gov-danger" data-action="close" data-id="'+b.id+'">提前結束</button>':'')+
       '<button type="button" class="gov-outline" data-action="invite" data-id="'+b.id+'">複製投票連結</button>'+
       (b.results_available?'<button type="button" class="gov-outline" data-action="results" data-id="'+b.id+'">查看彙總結果</button>':'');
@@ -104,6 +104,24 @@ function renderList(){
    '<div class="gov-actions">'+buttons+'</div>';
   node.append(item);
  }
+}
+function resetEditor(){
+ editingId=null;$('createForm').reset();$('startNow').checked=true;
+ $('startsAt').disabled=true;initDates();updateMode();
+ txt('formTitle','建立正式表決草稿');txt('createBtn','建立草稿（不立即啟用）');
+ show('cancelEdit',false);
+}
+function editDraft(b){
+ if(b.status!=='draft')return toast('已啟用的投票不得修改',true);
+ editingId=b.id;
+ $('ballotTitle').value=b.title;$('ballotDescription').value=b.description||'';
+ $('ballotMode').value=b.mode;updateMode();
+ $('ballotOptions').value=b.options.join('\n');
+ $('minChoices').value=b.min_choices;$('maxChoices').value=b.max_choices;
+ $('startNow').checked=false;$('startsAt').disabled=false;$('startsAt').value=dateInput(b.opens_at);
+ $('endsAt').value=dateInput(b.closes_at);$('reportMin').value=b.min_report_votes;
+ txt('formTitle','編輯表決草稿');txt('createBtn','儲存草稿修改');
+ show('cancelEdit',true);$('createForm').scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function createBallot(event){
  event.preventDefault();if(!roomId)return toast('請先選擇教室',true);
@@ -122,10 +140,12 @@ async function createBallot(event){
   if(!Number.isInteger(minReport)||minReport<1||minReport>100)throw Error('最低公開票數請設定為 1～100');
   if(!Number.isFinite(opens.getTime())||!Number.isFinite(closes.getTime())||closes<=opens||closes<=new Date())throw Error('開放／截止時間不合法');
   if(minReport===1&&!confirm('公開門檻只有 1 票，可能讓小型選舉洩露投票意向。確定繼續嗎？'))return;
-  await rpc(db,'cp2_ballot_create',{p_room:roomId,p_title:title,p_description:$('ballotDescription').value,
-   p_mode:mode,p_options:options,p_min:min,p_max:max,p_opens:opens.toISOString(),p_closes:closes.toISOString(),p_report_min:minReport});
-  $('createForm').reset();$('startNow').checked=true;$('startsAt').disabled=true;initDates();updateMode();
-  toast('正式表決草稿已建立，核對後可啟用');await loadBallots();
+  const values={p_title:title,p_description:$('ballotDescription').value,
+   p_mode:mode,p_options:options,p_min:min,p_max:max,p_opens:opens.toISOString(),p_closes:closes.toISOString(),p_report_min:minReport};
+  if(editingId)await rpc(db,'cp2_ballot_update',{p_ballot:editingId,...values});
+  else await rpc(db,'cp2_ballot_create',{p_room:roomId,...values});
+  toast(editingId?'草稿已更新':'正式表決草稿已建立，核對後可啟用');
+  resetEditor();await loadBallots();
  }catch(e){failure(e,'建立表決失敗');}
  finally{setBusy(btn,false);}
 }
@@ -134,6 +154,7 @@ async function handleAction(event){
  const action=btn.dataset.action;const ballot=ballots.find(x=>x.id===btn.dataset.id);if(!ballot)return;
  setBusy(btn,true,'處理中…');
  try{
+  if(action==='edit'){editDraft(ballot);return;}
   if(action==='activate'){
    if(!confirm('啟用後會凍結此刻有效的學生資格，題目與選項不可更改。確定啟用？'))return;
    const count=await rpc(db,'cp2_ballot_activate',{p_ballot:ballot.id});
@@ -181,10 +202,11 @@ function exportResults(){
 function wire(){
  $('loginForm').addEventListener('submit',signIn);$('logoutBtn').addEventListener('click',signOut);
  $('refreshBtn').addEventListener('click',loadRooms);
- $('roomSelect').addEventListener('change',e=>{roomId=e.target.value;show('resultSection',false);activeResult=null;void loadBallots();});
+ $('roomSelect').addEventListener('change',e=>{roomId=e.target.value;resetEditor();show('resultSection',false);activeResult=null;void loadBallots();});
  $('ballotMode').addEventListener('change',updateMode);
  $('startNow').addEventListener('change',e=>{$('startsAt').disabled=e.target.checked;});
- $('createForm').addEventListener('submit',createBallot);$('ballotList').addEventListener('click',handleAction);
+ $('createForm').addEventListener('submit',createBallot);$('cancelEdit').addEventListener('click',resetEditor);
+ $('ballotList').addEventListener('click',handleAction);
  $('exportResult').addEventListener('click',exportResults);
  $('hideResult').addEventListener('click',()=>show('resultSection',false));
  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&authorized)void loadBallots();});
