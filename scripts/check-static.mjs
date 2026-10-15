@@ -13,7 +13,8 @@ const required = [
   'js/config.js', 'js/common.js', 'js/teacher.js', 'js/student.js',
   'assets/style.css', 'supabase/01_install.sql',
   'supabase/02_grant_teacher.sql', 'supabase/03_fix_rooms_rls.sql',
-  'supabase/04_performance_indexes.sql'
+  'supabase/04_performance_indexes.sql',
+  'supabase/05_fix_vote_deadline.sql'
 ];
 for (const file of required) assert(present(file), 'Missing required file: ' + file);
 for (const pageName of ['index', 'teacher', 'student']) {
@@ -60,6 +61,8 @@ const schema = read('supabase/01_install.sql');
 assert(schema.includes('create policy cp2_rooms_read'), 'Room read RLS is required');
 assert(/owner_id\s*=\s*\(select auth\.uid\(\)\)/i.test(schema),
   'Room read RLS must use row owner_id directly');
+assert(schema.includes('clock_timestamp()>=v_q.ends_at'),
+  'Vote cutoff must use wall-clock time, not transaction timestamp');
 assert(schema.includes('cp2_vote') && schema.includes('cp2_join'),
   'Student membership and vote RPCs are required');
 console.log('ClassPoll static checks passed: ' + checks + ' assertions.');
