@@ -20,6 +20,7 @@ const allowedTeacher=new Set(teacherModules.map(x=>x.id));
 const allowedStudent=new Set(studentModules.map(x=>x.id));
 const sessionRoomKey='classpoll-2-last-room';
 const ballotRoomKey='classpoll-2-governance-last-room';
+const lastRoleKey='classpoll-2-campus-last-role';
 let teacherDB=null,studentDB=null,role=null,authUser=null,member=null,selected=null,frameLoadId=0,started=false;
 const roleModules=()=>role==='teacher'?teacherModules:studentModules;
 
@@ -82,6 +83,7 @@ function closeMenu(){
 }
 function openWorkspace(which,user,info){
  role=which;authUser=user||null;member=info||null;
+ localStorage.setItem(lastRoleKey,which);
  show('welcome',false);show('welcomeFooter',false);show('unifiedApp',true);
  $('teacherPassword').value='';$('studentAccess').value='';clearError();
  drawNavigation();
@@ -131,6 +133,9 @@ async function restoreExisting(){
   if(b.data?.session && await verifyStudentSession(b.data.session))return;
   selectRole('student');return;
  }
+ const lastRole=localStorage.getItem(lastRoleKey);
+ if(lastRole==='student' && b.data?.session && await verifyStudentSession(b.data.session))return;
+ if(lastRole==='teacher' && a.data?.session && await verifyTeacherSession(a.data.session))return;
  if(a.data?.session && await verifyTeacherSession(a.data.session))return;
  if(b.data?.session && await verifyStudentSession(b.data.session))return;
 }
@@ -177,7 +182,7 @@ async function logout(){
  const type=role;
  try{
   // Unmount personal information first, then invalidate its role-scoped session.
-  exitWorkspace();
+  localStorage.removeItem(lastRoleKey);exitWorkspace();
   if(type==='teacher'){
    const {error}=await teacherDB.auth.signOut();if(error)throw error;
    selectRole('teacher');
