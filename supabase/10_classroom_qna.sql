@@ -84,6 +84,37 @@ BEGIN
  INSERT INTO public.cp2_audit(room_id,actor_uid,event,details)
  VALUES(v_room,auth.uid(),'qna.archive',jsonb_build_object('question_id',p_question));
 END $$;
+-- Include the Q&A history in encrypted owner-only classroom exports.
+CREATE OR REPLACE FUNCTION private.cp2_room_snapshot(p_room uuid)
+RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $
+DECLARE v_r record;
+BEGIN
+ IF NOT private.cp2_owns(p_room) THEN RAISE EXCEPTION '只有教室擁有者可匯出完整備份' USING errcode='42501'; END IF;
+ SELECT r.code,r.title INTO v_r FROM public.cp2_rooms r WHERE r.id=p_room;
+ RETURN jsonb_build_object(
+   'format','classpoll-room-backup-v1','exported_at',clock_timestamp(),
+   'room',jsonb_build_object('code',v_r.code,'title',v_r.title),
+   'students',COALESCE((SELECT jsonb_agg(jsonb_build_object('student_no',s.student_no,'display_name',s.display_name,'active',s.is_active))
+                    FROM public.cp2_students s WHERE s.room_id=p_room),'[]'::jsonb),
+   'attendance',COALESCE((SELECT jsonb_agg(jsonb_build_object('student_no',s.student_no,'date',a.attended_on,'first_seen',a.first_seen))
+                    FROM public.cp2_attendance a JOIN public.cp2_students s ON s.id=a.student_id WHERE a.room_id=p_room),'[]'::jsonb),
+   'questions',COALESCE((SELECT jsonb_agg(jsonb_build_object('id',q.id,'prompt',q.prompt,'options',q.options,
+     'points',q.points,'status',q.status,'created_at',q.created_at,'correct_index',k.correct_index))
+     FROM public.cp2_questions q LEFT JOIN public.cp2_answer_keys k ON k.question_id=q.id WHERE q.room_id=p_room),'[]'::jsonb),
+   'answers',COALESCE((SELECT jsonb_agg(jsonb_build_object('question_id',v.question_id,'student_no',s.student_no,
+     'choice',v.choice,'created_at',v.created_at))
+     FROM public.cp2_votes v JOIN public.cp2_students s ON s.id=v.student_id
+     JOIN public.cp2_questions q ON q.id=v.question_id WHERE q.room_id=p_room),'[]'::jsonb),
+   'audit',COALESCE((SELECT jsonb_agg(jsonb_build_object('at',a.created_at,'event',a.event,'details',a.details))
+     FROM public.cp2_audit a WHERE a.room_id=p_room),'[]'::jsonb),
+   'inquiries',COALESCE((SELECT jsonb_agg(jsonb_build_object('student_no',s.student_no,
+     'question',i.body,'answer',i.answer,'status',i.status,'created_at',i.created_at,
+     'answered_at',i.answered_at))
+     FROM public.cp2_inquiries i JOIN public.cp2_students s ON s.id=i.student_id
+     WHERE i.room_id=p_room),'[]'::jsonb)
+ );
+END $;
+
 CREATE OR REPLACE FUNCTION public.cp2_qna_post(p_room uuid,p_body text)
 RETURNS uuid LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
  SELECT private.cp2_qna_post(p_room,p_body);$$;
