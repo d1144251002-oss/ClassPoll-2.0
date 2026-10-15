@@ -26,6 +26,8 @@ jobs:
             curl --fail --silent --show-error --location --retry 8 --retry-all-errors --retry-delay 5 --max-time 25 "${root}${endpoint}" -o /tmp/classpoll-smoke-body
             test -s /tmp/classpoll-smoke-body
           done
-          curl --fail --silent --show-error --location --max-time 25 "${root}/teacher.html" | grep -q "loginForm"
-          curl --fail --silent --show-error --location --max-time 25 "${root}/student.html" | grep -q "joinForm"
+          curl --fail --silent --show-error --location --max-time 25 "${root}/teacher.html" -o /tmp/classpoll-teacher.html
+          grep -q "loginForm" /tmp/classpoll-teacher.html
+          curl --fail --silent --show-error --location --max-time 25 "${root}/student.html" -o /tmp/classpoll-student.html
+          grep -q "joinForm" /tmp/classpoll-student.html
           echo "Live GitHub Pages endpoints available."
