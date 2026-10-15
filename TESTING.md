@@ -1,5 +1,25 @@
 # ClassPoll 2.0 測試與交付範圍
 
+## 2026-10-15 上線驗收更新（以實際執行結果為準）
+
+### 已經驗證
+- Supabase 正式專案 `mexndpdexhhqshcwyqxk` 的 10 張 `cp2_*` 表皆有 RLS，教師角色已綁定。
+- 同一個教師 Auth 帳號在受 RLS 的 SQL 交易中使用 `INSERT ... RETURNING` 建立教室成功。修正：`supabase/03_fix_rooms_rls.sql`（新安裝已同步至 `01_install.sql`）。
+- 以 PostgreSQL 模擬已驗證的 teacher / anonymous JWT claims，成功依序建立教室、學生、發布題目、入班、投票及讀回投票。
+- 錯誤入班碼、重複投票、學生呼叫教師 RPC、學生讀取正確答案、結束後投票皆被拒絕。
+- 允許修改答案時最終只有一筆投票，作答內容更新正常。
+- 重設入班碼會使舊綁定失效，持有新入班碼後可重新綁定；教師能查閱出席紀錄。
+- 1 秒限時題的交易延時測試：逾時後投票被拒絕，無票數寫入。修正：`supabase/05_fix_vote_deadline.sql`。
+- PostgreSQL 功能測試全部以 `BEGIN ... ROLLBACK` 執行，確認沒有留下任何 E2E 教室、學生或票數。
+- GitHub Actions `ClassPoll quality checks` 執行 JavaScript syntax、靜態 HTML 引用與設定檔 / RLS 規則檢查。以 GitHub Actions 顯示的最新結果為準。
+- 已為 4 個缺少索引的外鍵補上索引；效能顧問已不再回報「Unindexed foreign keys」。
+
+### 仍未達到全通過，不能當成完整真實 E2E
+- 尚未在 **真實的兩個不同 Supabase Auth session 與瀏覽器** 進行教師登入、匿名學生登入、QR Code、斷線重連、Reatime 同步、Excel 匯出的連續驗收。SQL 交易模擬角色不等於真實 JWT/網路端到端測試。
+- Supabase Auth Security Advisor 仍回報 `auth_leaked_password_protection` 未啟用；需在 Supabase Auth 設定中檢查並啟用（若目前方案支援）。
+- 正式上線前應將示範教師帳號換成專用教師信箱、強密碼，確認 `Authentication → Providers → Anonymous Sign-ins` 啟用，並確認 RLS 隔離測試有不同帳號及裝置。
+
+
 ## 已在交付容器執行的檢查
 
 - [x] `node --check` JavaScript 語法檢查（所有 JS）。
