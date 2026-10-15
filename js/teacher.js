@@ -56,7 +56,9 @@ function clearPrivateState(){
  rooms=[];students=[];attendance=[];bank=[];questions=[];keys=[];votes=[];audit=[];errors=[];codes=[];inquiries=[];
  issuedCodesByRoom.clear();
  requestGen++;renderCodes();$('password').value='';
- authUI();
+ for(const chart of [chartLive,chartPoll,chartAccuracy])try{chart?.destroy();}catch(e){console.warn('清除統計圖表失敗',e);}
+ chartLive=null;chartPoll=null;chartAccuracy=null;
+ renderAll();authUI();
 }
 async function onLogout(){
  if(!db)return;
@@ -90,11 +92,17 @@ async function getAll(table, filter=null,sort=null){
 }
 async function refreshAll(){
  if(!authorized||refreshing)return;refreshing=true;
+ const sessionId=user?.id;
  try{
-   rooms=await getAll('cp2_rooms',null,'created_at');bank=await getAll('cp2_bank',null,'created_at');
+   const [roomRows,bankRows]=await Promise.all([
+     getAll('cp2_rooms',null,'created_at'),getAll('cp2_bank',null,'created_at')
+   ]);
+   // Ignore stale responses after sign-out / account transition.
+   if(!authorized||user?.id!==sessionId)return;
+   rooms=roomRows;bank=bankRows;
    if(!roomId || !rooms.some(r=>r.id===roomId)){roomId=rooms[0]?.id||'';showIssuedForRoom();}
    renderRoomSelector();renderRooms();renderBank();await refreshRoom();
- }catch(e){failure(e,'同步管理資料失敗');}finally{refreshing=false;}
+ }catch(e){if(authorized)failure(e,'同步管理資料失敗');}finally{refreshing=false;}
 }
 async function refreshRoom(){
  const generation=++requestGen;
@@ -362,6 +370,17 @@ function wire(){
  $('roomForm').addEventListener('submit',createRoom);$('studentForm').addEventListener('submit',createStudent);
  $('bankForm').addEventListener('submit',saveBank);$('publishForm').addEventListener('submit',publish);
  $('bankReset').addEventListener('click',clearBankForm);$('bulkImport').addEventListener('click',bulkImport);
+ $('rosterUpload').addEventListener('change',async e=>{
+  const file=e.target.files?.[0];if(!file)return;
+  try{
+   if(file.size>1000000)throw Error('名冊檔案上限 1 MB');
+   const content=await file.text();
+   const parsed=parseRosterCSV(content);
+   $('bulkRoster').value=content;
+   toast('已讀取 '+parsed.length+' 名學生，請檢查內容後按「批次新增學生」');
+  }catch(err){failure(err,'讀取 CSV 名冊失敗');}
+  finally{e.target.value='';}
+ });
  $('closeBtn').addEventListener('click',close);
  $('refreshQnaBtn').addEventListener('click',refreshQna);
  $('sideNav').addEventListener('click',e=>{const b=e.target.closest('[data-tab]');if(b)activateTab(b.dataset.tab);});
