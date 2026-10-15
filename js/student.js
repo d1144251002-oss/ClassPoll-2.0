@@ -1,7 +1,7 @@
 import {$,txt,show,toast,failure,setBusy,fmtDate,asOptions,client,query,rpc,guardConfig,listenReconnect,setErrorReporter} from './common.js';
 
 let db=null,authId=null,member=null,current=null,ownVote=null,questionChannel=null;
-let loading=false,sending=false,lastQuestionId=null,subscribed=false,lastSocketErrorAt=0;
+let loading=false,pendingSync=false,sending=false,lastQuestionId=null,subscribed=false,lastSocketErrorAt=0;
 const storage='classpoll-2-last-room';
 
 function setStatus(text,ok){txt('connStatus',`${ok?'●':'○'} ${text}`);$('connStatus').style.color=ok?'#08756f':'#c27c32';}
@@ -57,7 +57,7 @@ async function connected(info){
  await startStream();await syncQuestion();await heartbeat();
 }
 async function leave(){
- await stopStream();member=null;current=null;ownVote=null;lastQuestionId=null;
+ await stopStream();member=null;current=null;ownVote=null;lastQuestionId=null;pendingSync=false;
  localStorage.removeItem(storage);show('studentPage',false);show('joinPage',true);
  // Returns to admission screen without invalidating the anonymous Auth identity.
 }
@@ -77,20 +77,31 @@ async function startStream(){
  });
 }
 async function syncQuestion(){
- if(!member||loading)return;loading=true;
+ if(!member)return;
+ // Don't drop a Realtime update while an older HTTP request is in flight.
+ if(loading){pendingSync=true;return;}
+ loading=true;
+ const roomId=member.room_id;
  try{
    const qs=await query(db.from('cp2_questions').select('id,room_id,prompt,options,points,allow_changes,status,published_at,ends_at')
-      .eq('room_id',member.room_id).in('status',['published','closed']).order('published_at',{ascending:false}).limit(1));
+      .eq('room_id',roomId).in('status',['published','closed']).order('published_at',{ascending:false}).limit(1));
+   if(member?.room_id!==roomId)return; // Ignore responses from a room already left.
    const newest=qs?.[0]||null;
+   let answer=null;
+   if(newest?.status==='published'){
+     answer=await query(db.from('cp2_votes').select('id,choice,updated_at').eq('question_id',newest.id).maybeSingle());
+   }
+   if(member?.room_id!==roomId)return;
    current=newest;
-   if(current?.status==='published'){
-     const answer=await query(db.from('cp2_votes').select('id,choice,updated_at').eq('question_id',current.id).maybeSingle());
-     ownVote=answer||null;
-   }else ownVote=null;
+   ownVote=answer;
    renderQuestion();
    if(navigator.onLine)setStatus(subscribed?'即時連線正常':'自動補同步正常',true);
- }catch(e){setStatus('同步失敗 · 重新嘗試',false);console.error('題目讀取失敗',e);}
- finally{loading=false;}
+ }catch(e){
+   if(member?.room_id===roomId){setStatus('同步失敗 · 重新嘗試',false);console.error('題目讀取失敗',e);}
+ }finally{
+   loading=false;
+   if(pendingSync){pendingSync=false;void syncQuestion();}
+ }
 }
 function renderQuestion(){
  const q=current;
@@ -124,11 +135,17 @@ async function sendAnswer(choice){
  try{
    const voteId=await rpc(db,'cp2_vote',{p_question:qid,p_choice:choice});
    if(!voteId)throw Error('伺服器未確認投票成功');
-   const stored=await query(db.from('cp2_votes').select('id,choice,updated_at').eq('question_id',qid).maybeSingle());
-   if(!stored||stored.choice!==choice)throw Error('寫入已回應，但重新讀取結果與提交內容不同');
-   ownVote=stored;
+   // The RPC confirmation is authoritative. A temporary read failure should not
+   // label a committed answer as failed (which would encourage duplicate votes).
+   let stored=null;
+   try{
+     stored=await query(db.from('cp2_votes').select('id,choice,updated_at').eq('question_id',qid).maybeSingle());
+   }catch(e){console.warn('投票已寫入，回讀暫時失敗，稍後會補同步',e);}
+   if(stored && stored.choice!==choice)throw Error('伺服器回讀的答案與提交內容不一致');
+   ownVote=stored||{id:voteId,choice,updated_at:new Date().toISOString()};
    if(current?.id===qid)renderQuestion();
-   toast('答案已由 Supabase 確認儲存');
+   toast(stored?'答案已由 Supabase 確認儲存':'投票已由伺服器接受，正在重新確認結果');
+   if(!stored)void syncQuestion();
  }catch(e){
    $('submitState').className='submit-state fail';txt('submitState','✕ 送出失敗，請確認網路後重試');
    failure(e,'投票失敗');
