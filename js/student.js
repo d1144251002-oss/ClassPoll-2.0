@@ -73,7 +73,7 @@ async function leave(){
  // Returns to admission screen without invalidating the anonymous Auth identity.
 }
 async function syncQna(){
- if(!member||qnaBusy)return;
+ if(!member)return;
  const room=member.room_id;
  try{
   const items=await rpc(db,'cp2_qna_list',{p_room:room,p_limit:100});
