@@ -50,6 +50,22 @@ CREATE TABLE IF NOT EXISTS public.cp3_grade_weights(
  weight int NOT NULL CHECK(weight BETWEEN 0 AND 100),
  PRIMARY KEY(course_id,category)
 );
+-- Each course explicitly owns its own quiz and attendance measurement.
+CREATE TABLE IF NOT EXISTS public.cp3_course_questions(
+ course_id uuid NOT NULL REFERENCES public.cp3_courses(id),
+ question_id uuid NOT NULL UNIQUE REFERENCES public.cp2_questions(id),
+ PRIMARY KEY(course_id,question_id)
+);
+CREATE TABLE IF NOT EXISTS public.cp3_session_attendance(
+ session_id uuid NOT NULL REFERENCES public.cp3_class_sessions(id),
+ student_id uuid NOT NULL REFERENCES public.cp2_students(id),
+ present boolean NOT NULL,
+ recorded_by uuid NOT NULL REFERENCES public.cp2_teachers(user_id),
+ created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
+ PRIMARY KEY(session_id,student_id)
+);
+CREATE INDEX IF NOT EXISTS cp3_course_question_question_idx ON public.cp3_course_questions(question_id);
+CREATE INDEX IF NOT EXISTS cp3_session_attendance_student_idx ON public.cp3_session_attendance(student_id);
 CREATE INDEX IF NOT EXISTS cp3_sessions_course_idx ON public.cp3_class_sessions(course_id,session_on);
 CREATE INDEX IF NOT EXISTS cp3_assignments_course_idx ON public.cp3_assignments(course_id,status,due_at);
 CREATE INDEX IF NOT EXISTS cp3_submissions_student_idx ON public.cp3_submissions(student_id,assignment_id);
@@ -57,7 +73,8 @@ CREATE INDEX IF NOT EXISTS cp3_revisions_submitted_idx ON public.cp3_submission_
 DO $$ DECLARE tab text;BEGIN
  FOREACH tab IN ARRAY ARRAY[
  'cp3_class_sessions','cp3_assignments','cp3_submissions',
- 'cp3_submission_revisions','cp3_grade_reviews','cp3_grade_weights'
+ 'cp3_submission_revisions','cp3_grade_reviews','cp3_grade_weights',
+ 'cp3_course_questions','cp3_session_attendance'
  ] LOOP
   EXECUTE 'ALTER TABLE public.'||tab||' ENABLE ROW LEVEL SECURITY';
   EXECUTE 'REVOKE ALL ON TABLE public.'||tab||' FROM PUBLIC,anon,authenticated';
@@ -75,6 +92,43 @@ BEGIN
  RETURNING id INTO v_id;
  RETURN v_id;
 END $$;
+
+CREATE OR REPLACE FUNCTION private.cp3_sessions_list(p_course uuid)
+RETURNS TABLE(id uuid,session_on date,title text)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path='' AS $
+BEGIN
+ IF NOT private.cp3_can_view_course(p_course) THEN RAISE EXCEPTION '沒有課程讀取權限' USING errcode='42501'; END IF;
+ RETURN QUERY SELECT s.id,s.session_on,s.title FROM public.cp3_class_sessions s
+ WHERE s.course_id=p_course ORDER BY s.session_on DESC LIMIT 200;
+END $;
+CREATE OR REPLACE FUNCTION private.cp3_attendance_set(p_session uuid,p_student uuid,p_present boolean)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+DECLARE v_course uuid;v_room uuid;
+BEGIN
+ SELECT course_id INTO v_course FROM public.cp3_class_sessions WHERE id=p_session;
+ IF v_course IS NULL OR NOT private.cp3_can_edit_course(v_course) THEN
+  RAISE EXCEPTION '課次不存在或教師權限不足' USING errcode='42501'; END IF;
+ IF NOT EXISTS(SELECT 1 FROM public.cp3_enrollments WHERE course_id=v_course AND student_id=p_student AND is_active)
+ THEN RAISE EXCEPTION '學生不是此課程的有效修課者'; END IF;
+ INSERT INTO public.cp3_session_attendance(session_id,student_id,present,recorded_by)
+ VALUES(p_session,p_student,p_present,auth.uid())
+ ON CONFLICT(session_id,student_id) DO UPDATE SET present=excluded.present,recorded_by=excluded.recorded_by;
+ SELECT room_id INTO v_room FROM public.cp3_courses WHERE id=v_course;
+ INSERT INTO public.cp2_audit(room_id,actor_uid,event,details)
+ VALUES(v_room,auth.uid(),'course.attendance',jsonb_build_object('session_id',p_session,'student_id',p_student,'present',p_present));
+END $;
+CREATE OR REPLACE FUNCTION private.cp3_course_question_link(p_course uuid,p_question uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $
+DECLARE v_room uuid;v_question_room uuid;
+BEGIN
+ IF NOT private.cp3_can_edit_course(p_course) THEN RAISE EXCEPTION '無權將試題加入課程' USING errcode='42501'; END IF;
+ SELECT room_id INTO v_room FROM public.cp3_courses WHERE id=p_course AND status='active';
+ SELECT room_id INTO v_question_room FROM public.cp2_questions WHERE id=p_question;
+ IF v_room IS NULL OR v_question_room IS NULL OR v_room<>v_question_room
+ THEN RAISE EXCEPTION '題目和課程必須屬於同一教室'; END IF;
+ INSERT INTO public.cp3_course_questions(course_id,question_id) VALUES(p_course,p_question)
+ ON CONFLICT DO NOTHING;
+END $;
 CREATE OR REPLACE FUNCTION private.cp3_assignment_save(
  p_id uuid,p_course uuid,p_title text,p_instructions text,p_opens timestamptz,
  p_due timestamptz,p_points numeric,p_publish boolean)
@@ -235,16 +289,19 @@ BEGIN
   CASE WHEN (SELECT count(*) FROM public.cp3_class_sessions x WHERE x.course_id=p_course)=0
   THEN NULL::numeric ELSE
    round(100.0*(SELECT count(*) FROM public.cp3_class_sessions x
-   JOIN public.cp2_attendance att ON att.student_id=b.id AND att.attended_on=x.session_on
+   JOIN public.cp3_session_attendance att ON att.session_id=x.id AND att.student_id=b.id AND att.present
    WHERE x.course_id=p_course)/
    (SELECT count(*) FROM public.cp3_class_sessions x WHERE x.course_id=p_course),2) END AS ap,
-  CASE WHEN (SELECT COALESCE(sum(q.points),0) FROM public.cp2_questions q
-      WHERE q.room_id=b.room_id AND q.status='closed')=0 THEN NULL::numeric
+  CASE WHEN (SELECT COALESCE(sum(q.points),0) FROM public.cp3_course_questions link
+      JOIN public.cp2_questions q ON q.id=link.question_id WHERE link.course_id=p_course AND q.status='closed')=0 THEN NULL::numeric
   ELSE round(100.0*(SELECT COALESCE(sum(CASE WHEN v.choice=k.correct_index THEN q.points ELSE 0 END),0)
     FROM public.cp2_votes v JOIN public.cp2_questions q ON q.id=v.question_id
+    JOIN public.cp3_course_questions link ON link.question_id=q.id AND link.course_id=p_course
     JOIN public.cp2_answer_keys k ON k.question_id=q.id WHERE v.student_id=b.id
-    AND q.room_id=b.room_id AND q.status='closed')/
-    (SELECT sum(q.points) FROM public.cp2_questions q WHERE q.room_id=b.room_id AND q.status='closed'),2) END AS qp,
+    AND q.status='closed')/
+    (SELECT sum(q.points) FROM public.cp3_course_questions link
+      JOIN public.cp2_questions q ON q.id=link.question_id
+      WHERE link.course_id=p_course AND q.status='closed'),2) END AS qp,
   CASE WHEN (SELECT COALESCE(sum(a.max_points),0) FROM public.cp3_assignments a
     WHERE a.course_id=p_course AND a.status<>'draft')=0 THEN NULL::numeric
   ELSE round(100.0*(SELECT COALESCE(sum(g.points),0) FROM public.cp3_submissions s
@@ -266,6 +323,15 @@ END $$;
 -- Publication of grades outside ClassPoll is manual, never automated by these APIs.
 CREATE OR REPLACE FUNCTION public.cp3_session_save(p_course uuid,p_date date,p_title text)
 RETURNS uuid LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$ SELECT private.cp3_session_save(p_course,p_date,p_title); $$;
+CREATE OR REPLACE FUNCTION public.cp3_sessions_list(p_course uuid)
+RETURNS TABLE(id uuid,session_on date,title text)
+LANGUAGE sql SECURITY INVOKER SET search_path='' AS $ SELECT * FROM private.cp3_sessions_list(p_course); $;
+CREATE OR REPLACE FUNCTION public.cp3_attendance_set(p_session uuid,p_student uuid,p_present boolean)
+RETURNS void LANGUAGE sql SECURITY INVOKER SET search_path='' AS $
+ SELECT private.cp3_attendance_set(p_session,p_student,p_present); $;
+CREATE OR REPLACE FUNCTION public.cp3_course_question_link(p_course uuid,p_question uuid)
+RETURNS void LANGUAGE sql SECURITY INVOKER SET search_path='' AS $
+ SELECT private.cp3_course_question_link(p_course,p_question); $;
 CREATE OR REPLACE FUNCTION public.cp3_assignment_save(p_id uuid,p_course uuid,p_title text,p_instructions text,
  p_opens timestamptz,p_due timestamptz,p_points numeric,p_publish boolean)
 RETURNS uuid LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$
@@ -295,7 +361,8 @@ DO $$DECLARE f record;BEGIN
  FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
  WHERE n.nspname IN('private','public') AND p.proname IN (
  'cp3_session_save','cp3_assignment_save','cp3_assignment_list','cp3_assignment_submit',
- 'cp3_submission_list','cp3_grade_review','cp3_weights_set','cp3_gradebook') LOOP
+ 'cp3_submission_list','cp3_grade_review','cp3_weights_set','cp3_gradebook',
+ 'cp3_sessions_list','cp3_attendance_set','cp3_course_question_link') LOOP
   EXECUTE 'REVOKE ALL ON FUNCTION '||f.signature||' FROM PUBLIC,anon';
   EXECUTE 'GRANT EXECUTE ON FUNCTION '||f.signature||' TO authenticated';
  END LOOP;
