@@ -40,7 +40,7 @@ test('student can join and ask a private classroom question',async({page})=>{
  await page.locator('#joinRoom').fill('QA2026');
  await page.locator('#joinNumber').fill('QA123');
  await page.locator('#joinAccess').fill('1234567890abcdef1234567890abcdef');
- await page.locator('#joinForm button[type=submit]').click();
+ await page.locator('#joinBtn').click();
  await expect(page.locator('#studentPage')).toBeVisible();
  await page.locator('#qnaText').fill('請老師解釋鏈結串列的時間複雜度');
  await page.locator('#qnaSendBtn').click();
