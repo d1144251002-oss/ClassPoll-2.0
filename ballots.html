@@ -28,7 +28,7 @@
 <div class="gov-toolbar"><label>選擇教室 <select id="roomSelect"><option value="">選擇已建立的教室</option></select></label>
 <span id="adminIdentity" class="gov-muted"></span><button id="refreshBtn" type="button" class="gov-outline">重新整理</button><button id="logoutBtn" type="button" class="gov-outline">登出</button></div>
 <div class="gov-columns">
-<section class="gov-card"><div class="gov-card-head"><span class="gov-eyebrow">NEW BALLOT</span><h2>建立正式表決草稿</h2><p>草稿不開放投票；啟用時會凍結當時有效的學生名冊。啟用後題目與規則不可更改。</p></div>
+<section class="gov-card"><div class="gov-card-head"><span class="gov-eyebrow">NEW BALLOT</span><h2 id="formTitle">建立正式表決草稿</h2><p>草稿不開放投票；啟用時會凍結當時有效的學生名冊。啟用後題目與規則不可更改。</p></div>
 <form id="createForm" class="gov-form">
 <label>表決主題<input id="ballotTitle" maxlength="160" required placeholder="例如：下學期社團活動方案"></label>
 <label>表決說明<textarea id="ballotDescription" rows="3" maxlength="2000" placeholder="說明背景、決議範圍、選票效力與審查程序"></textarea></label>
@@ -45,7 +45,7 @@
 <label>截止時間<input id="endsAt" type="datetime-local" required></label></div>
 <label>最低結果公開票數 <input id="reportMin" type="number" min="1" max="100" value="3" required></label>
 <p class="gov-note">低於最低公開票數時，教師及學生都不能查看選項統計。設為 1 可能暴露小型投票的個人意向；正式投票建議維持至少 3 票。</p>
-<button class="gov-primary" type="submit" id="createBtn">建立草稿（不立即啟用）</button>
+<button class="gov-primary" type="submit" id="createBtn">建立草稿（不立即啟用）</button><button class="gov-outline hidden" type="button" id="cancelEdit">取消草稿編輯</button>
 </form></section>
 <section class="gov-card gov-list-card"><div class="gov-card-head"><span class="gov-eyebrow">BALLOT REGISTER</span><h2>表決名冊與進度</h2>
 <p>需先從「課堂管理」建立教室與學生，才能啟用投票。</p></div>
