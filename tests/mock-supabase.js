@@ -2,7 +2,8 @@
  const teacher={id:'11111111-1111-4111-8111-111111111111',email:'qa-teacher@example.invalid',is_anonymous:false};
  const anonymousUser={id:'77777777-7777-4777-8777-777777777777',is_anonymous:true};
  let current=localStorage.getItem('__mock_student_logged')?anonymousUser:
-  (location.pathname.endsWith('/student.html')||localStorage.getItem('__mock_no_auto')||localStorage.getItem('__mock_teacher_signedout')?null:teacher);
+  (localStorage.getItem('__mock_teacher_logged')?teacher:
+  (location.pathname.endsWith('/student.html')||localStorage.getItem('__mock_no_auto')||localStorage.getItem('__mock_teacher_signedout')?null:teacher));
  const room={id:'22222222-2222-4222-8222-222222222222',title:'資料結構測試班',code:'QA2026',owner_id:teacher.id,is_active:true,created_at:'2026-10-15T00:00:00Z'};
  const dashboard={rooms:[
   {...room,role:'owner',students:2,active_students:2,present_today:1,questions:3,live_questions:1,answers:3,recent_errors:0},
@@ -39,8 +40,8 @@
  const db={auth:{
    getSession:async()=>({data:{session:current?{user:current}:null},error:null}),
    signInAnonymously:async()=>{current=anonymousUser;localStorage.setItem('__mock_student_logged','1');return {data:{user:current,session:{user:current}},error:null}},
-   signInWithPassword:async()=>{current=teacher;localStorage.removeItem('__mock_teacher_signedout');return {data:{user:current,session:{user:current}},error:null}},
-   signOut:async()=>{if(current?.is_anonymous)localStorage.removeItem('__mock_student_logged');else localStorage.setItem('__mock_teacher_signedout','1');current=null;return {error:null}},
+   signInWithPassword:async()=>{current=teacher;localStorage.setItem('__mock_teacher_logged','1');localStorage.removeItem('__mock_teacher_signedout');return {data:{user:current,session:{user:current}},error:null}},
+   signOut:async()=>{if(current?.is_anonymous)localStorage.removeItem('__mock_student_logged');else {localStorage.removeItem('__mock_teacher_logged');localStorage.setItem('__mock_teacher_signedout','1');}current=null;return {error:null}},
    onAuthStateChange:()=>({data:{subscription:{unsubscribe(){}}}})
   },
   from:chain,rpc,
