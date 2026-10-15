@@ -1,0 +1,1 @@
+<script setup lang="ts">defineProps<{title:string}>();</script><template><section class="panel"><p class="muted">龍華科技大學 / ClassPoll 3.0</p><h1>{{title}}</h1><p>此模組正在進行 Vue 3／TypeScript 遷移，尚未對外開放。原有 ClassPoll 2.0 正式系統持續提供完整教學功能。</p><p class="danger">這是開發工作台，不能當成已驗收的正式校務模組。</p><a href="../../index.html">返回現行正式平台</a></section></template> 
