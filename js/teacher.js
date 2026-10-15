@@ -87,11 +87,23 @@ async function refreshLiveOnly(){
      getAll('cp2_students',x=>x.eq('room_id',expectedRoomId))
    ]);
    if(expectedRoomId!==roomId)return;
-   const changed=q.some(x=>!questions.find(old=>old.id===x.id))||q.length!==questions.length;
-   if(changed){await refreshRoom();return;}
-   questions=q;students=s;
-   active=q.find(x=>x.status==='published')||null;
-   if(active){votes=votes.filter(v=>v.question_id!==active.id).concat(await getAll('cp2_votes',x=>x.eq('question_id',active.id)));}
+   const previousActiveId=active?.id||null;
+   const nextActive=q.find(x=>x.status==='published')||null;
+   // Status changes and deadlines must refresh the complete question state.
+   const changed=q.length!==questions.length || q.some(item=>{
+     const previous=questions.find(old=>old.id===item.id);
+     return !previous || previous.status!==item.status ||
+       previous.ends_at!==item.ends_at || previous.published_at!==item.published_at;
+   });
+   if(changed || previousActiveId!==(nextActive?.id||null)){
+     await refreshRoom();return;
+   }
+   questions=q;students=s;active=nextActive;
+   if(active){
+     const latestVotes=await getAll('cp2_votes',x=>x.eq('question_id',active.id));
+     if(expectedRoomId!==roomId)return;
+     votes=votes.filter(v=>v.question_id!==active.id).concat(latestVotes);
+   }
    renderOverview();renderLive();renderStudents();
    if(active?.id!==voteChannel?.__questionId) await resetSubscriptions();
  }catch(e){console.error('增量同步失敗',e);}
