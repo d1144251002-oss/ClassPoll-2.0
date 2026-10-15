@@ -209,6 +209,10 @@ function wire(){
 }
 window.addEventListener('load',async()=>{
  if(started)return;started=true;wire();selectRole('teacher');
+ const inviteRoom=new URLSearchParams(location.search).get('room');
+ if(inviteRoom && /^[A-Za-z0-9]{4,12}$/.test(inviteRoom)){
+   $('studentRoom').value=inviteRoom.toUpperCase();selectRole('student');
+ }
  if(!guardConfig())return;
  teacherDB=client('teacher');studentDB=client('student');
  if(!teacherDB||!studentDB){show('configNotice');return;}
