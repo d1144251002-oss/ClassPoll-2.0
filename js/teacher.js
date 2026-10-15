@@ -4,6 +4,7 @@ let db=null, user=null, authorized=false, tab='overview', roomId='', room=null, 
 let rooms=[],students=[],attendance=[],bank=[],questions=[],keys=[],votes=[],audit=[],errors=[],codes=[];
 let voteChannel=null,questionChannel=null, chartLive=null,chartPoll=null,chartAccuracy=null;
 let interval=null,refreshing=false,requestGen=0;
+import {parseRosterCSV} from './platform-utils.js';
 const today=taipeiToday;
 const esc=escapeHtml;
 const byId=(xs,id)=>xs.find(x=>x.id===id);
@@ -215,32 +216,26 @@ async function createRoom(ev){ev.preventDefault();const b=ev.submitter;if(!db)re
  }catch(e){failure(e,'建立教室失敗');}finally{setBusy(b,false);}}
 async function bulkImport(){
  if(!roomId)return toast('請先選擇教室',true);
- const parsed=$('bulkRoster').value.split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
- if(!parsed.length)return toast('請輸入至少一位學生',true);
- if(parsed.length>200)return toast('每次最多建立 200 位學生',true);
- const b=$('bulkImport');setBusy(b,true,'正在建立學生…');let success=0,failed=[];
+ const b=$('bulkImport');setBusy(b,true,'正在驗證並匯入整批名冊…');
+ const originalRoom=roomId;
  try{
-   for(const row of parsed){
-     const split=row.split(',');const no=split.shift()?.trim(),name=split.join(',').trim();
-     if(!no||!name){failed.push({row,reason:'格式不正確'});continue;}
-     try{
-       const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});
-       if(!result?.[0])throw Error('伺服器未回傳入班碼');
-       codes.push({教室代碼:room.code,學號:no,姓名:name,個人入班碼:result[0].access_code});
-       success++;
-     }catch(e){failed.push({row,reason:e.message});}
-   }
-   renderCodes();
-   // Keep original failed rows so teachers can correct and retry without losing names.
-   $('bulkRoster').value=failed.map(x=>x.row).join('\n');
+  const parsed=parseRosterCSV($('bulkRoster').value);
+  if(!confirm('將一次新增 '+parsed.length+' 位學生。若有任何學號重複或格式錯誤，資料庫會取消整批新增。確定嗎？'))return;
+  const created=await rpc(db,'cp2_roster_import',{p_room:originalRoom,p_roster:parsed});
+  if(!Array.isArray(created)||created.length!==parsed.length)throw Error('回傳的名冊筆數與提交不一致，請先重新查詢再操作');
+  const roomForImport=rooms.find(r=>r.id===originalRoom);
+  // Issued credentials are transient; no access hash is ever stored on the client.
+  const newCodes=created.map(item=>({教室代碼:roomForImport?.code||'',學號:item.student_no,姓名:item.display_name,個人入班碼:item.access_code}));
+  if(roomId===originalRoom){
+   codes.push(...newCodes);renderCodes();$('bulkRoster').value='';
    await refreshRoom();
-   toast(`批次新增完成：成功 ${success} 人、失敗 ${failed.length} 人`,failed.length>0);
-   if(failed.length)console.warn('批次新增失敗',failed.map(x=>`${x.row}：${x.reason}`));
- }catch(e){
-   failure(e,'同步學生名冊失敗；已建立的入班碼仍保留在畫面上');
- }finally{
-   setBusy(b,false);
- }
+  }else{
+   // Preserve issuance in memory even if the teacher changed the displayed room.
+   codes.push(...newCodes);toast('名冊匯入成功，但你已切換教室；請立即匯出新發放的入班碼',true);
+  }
+  toast('已安全新增 '+created.length+' 位學生，請立即匯出入班碼');
+ }catch(e){failure(e,'整批匯入取消，未新增任何學生');}
+ finally{setBusy(b,false);}
 }
 async function createStudent(ev){ev.preventDefault();if(!roomId)return toast('請先選擇教室',true);const b=ev.submitter;setBusy(b,true);
  try{const no=$('studentNumber').value.trim(),name=$('studentName').value.trim();const result=await rpc(db,'cp2_add_student',{p_room:roomId,p_number:no,p_name:name});const entry=result?.[0];if(!entry)throw Error('未取得新學生入班碼');
@@ -253,7 +248,7 @@ function renderCodes(){
 function bankFormData(prefix){
  const opt=[...document.querySelectorAll(`.${prefix}Option`)].map(e=>e.value.trim()).filter(Boolean);
  const correct=Number($(`${prefix}Answer`).value),points=Number($(`${prefix}Points`).value),prompt=$(`${prefix}Prompt`).value.trim();
- if(!prompt||opt.length<2||opt.length>6||correct>=opt.length||new Set(opt).size!==opt.length)throw Error('題目至少兩個不重複選項，且正確答案必須在選項範圍內');
+ if(!prompt||opt.length<2||opt.length>6||!Number.isInteger(correct)||correct<0||correct>=opt.length||new Set(opt).size!==opt.length)throw Error('題目至少兩個不重複選項，且正確答案必須在選項範圍內');
  if(!Number.isInteger(points)||points<0||points>100)throw Error('分數須在 0~100');
  return {prompt,options:opt,correct_index:correct,points};
 }
