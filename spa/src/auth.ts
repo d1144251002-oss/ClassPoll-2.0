@@ -35,8 +35,15 @@ export async function loginTeacher(email:string,password:string){
  if(!supabase)throw Error('尚未配置安全的資料服務');
  const {data,error}=await supabase.auth.signInWithPassword({email:email.trim(),password});
  if(error)throw error;
- await determineRole(data.user);
- if(role.value!=='teacher')throw Error('此帳號尚未取得授權教師權限');
+ // Avoid relying on the asynchronous onAuthStateChange callback finishing first.
+ // A single owner-scoped whitelist query is the authority for this login attempt.
+ const result=await supabase.from('cp2_teachers').select('user_id').eq('user_id',data.user.id).maybeSingle();
+ if(result.error||!result.data){
+  await supabase.auth.signOut();
+  ++authGeneration;currentUser.value=null;role.value='none';
+  throw Error('此帳號尚未取得授權教師權限');
+ }
+ ++authGeneration;currentUser.value=data.user;role.value='teacher';
 }
 export async function logout(){
  if(!supabase)return;
