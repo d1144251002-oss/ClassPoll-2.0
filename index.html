@@ -1,5 +1,81 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#182b54"><title>ClassPoll 2.0｜教室即時互動</title><link rel="stylesheet" href="assets/style.css"></head>
-<body class="landing"><header class="topbar"><div class="brand"><span class="logo">C<span>●</span></span><span>ClassPoll <small>2.0</small></span></div><span class="tag">教學互動管理平台</span></header>
-<main class="landing-wrap"><div class="hero-copy"><div class="eyebrow">REAL-TIME CLASSROOM ENGAGEMENT</div><h1>讓每一堂課，<br><span>都有即時回應。</span></h1><p>從建立教室、學生名冊、互動題庫到即時投票與學習成果分析，所有功能都整合在同一個平台。</p><div class="hero-highlights"><span>◈ Supabase 即時同步</span><span>◈ 教師驗證與資料隔離</span><span>◈ Excel／CSV 成績匯出</span></div></div>
-<div class="entry-grid"><a class="entry-card" href="teacher.html"><div class="entry-icon teacher-icon">▣</div><div><div class="eyebrow">FOR EDUCATORS</div><h2>教師控制台</h2><p>建立教室、學生名冊、題庫管理、發布測驗及即時統計。</p></div><span class="enter">前往教師端 ↗</span></a><a class="entry-card" href="student.html"><div class="entry-icon student-icon">◉</div><div><div class="eyebrow">FOR STUDENTS</div><h2>學生作答入口</h2><p>使用教師發給你的個人入班碼登入，參加課堂測驗並送出答案。</p></div><span class="enter">前往學生端 ↗</span></a><a class="entry-card" href="ballots.html"><div class="entry-icon teacher-icon">◆</div><div><div class="eyebrow">FORMAL GOVERNANCE</div><h2>正式表決管理</h2><p>建立單選、複選與決議表決，凍結資格名冊，控管開票時間與公開統計。</p></div><span class="enter">前往表決管理 ↗</span></a><a class="entry-card" href="vote.html"><div class="entry-icon student-icon">✓</div><div><div class="eyebrow">VERIFIED BALLOTS</div><h2>正式投票入口</h2><p>依個人入班碼核對投票資格，一人一票，完成後保留收件憑證。</p></div><span class="enter">前往正式投票 ↗</span></a><a class="entry-card" href="admin.html"><div class="entry-icon teacher-icon">▦</div><div><div class="eyebrow">PLATFORM MANAGEMENT</div><h2>整體管理後台</h2><p>統一教室儀表板、跨模組入口、教師角色權限、稽核、加密備份與名冊恢復。</p></div><span class="enter">前往管理中心 ↗</span></a></div></main>
-<footer class="landing-footer">ClassPoll 2.0 · Responsive learning platform · 2026</footer></body></html>
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#112d52"><meta name="description" content="龍華科技大學 ClassPoll 校園教學互動管理平台，提供教師教室管理、即時測驗、學生出席、學習分析與校園表決模組。">
+<title>龍華科技大學｜ClassPoll 校園教學互動平台</title>
+<link rel="stylesheet" href="assets/campus.css">
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script type="module" src="js/portal.js"></script>
+</head>
+<body class="lhu-root">
+<header class="campus-top">
+ <a class="campus-wordmark" href="index.html" aria-label="龍華科技大學 ClassPoll 首頁">
+  <span class="campus-symbol" aria-hidden="true">龍</span>
+  <span><strong>龍華科技大學</strong><small>LUNGHWA UNIVERSITY OF SCIENCE AND TECHNOLOGY</small></span>
+ </a>
+ <span class="top-product">ClassPoll <b>2.0</b><span>校園教學互動平台</span></span>
+</header>
+<main>
+<section id="welcome" class="welcome-wrap">
+ <div class="welcome-info">
+   <span class="welcome-kicker">LHU CAMPUS LEARNING PLATFORM</span>
+   <h1>一個校園平台，<br><em>串聯每一堂課。</em></h1>
+   <p>從教師班級管理、學生出席、題庫與即時測驗，到課堂提問、學習分析及校園表決，所有模組都在同一個工作台。</p>
+   <div class="welcome-features" aria-label="平台特色">
+    <span><i aria-hidden="true">◈</i> 教室與學生管理</span><span><i aria-hidden="true">◈</i> 即時課堂互動</span><span><i aria-hidden="true">◈</i> 學習成果與報表</span>
+   </div>
+   <div class="welcome-identity">龍華科技大學校園部署適用版 <span>｜</span> 以授權身分存取資料</div>
+ </div>
+ <section class="campus-login" aria-labelledby="loginHeading">
+  <p class="login-eyebrow">UNIFIED ACCESS</p><h2 id="loginHeading">登入校園教學平台</h2>
+  <p class="login-help">請選擇使用身分，使用系統管理員核發的憑證登入。</p>
+  <div class="role-tabs" role="tablist" aria-label="登入身分">
+   <button id="teacherRole" type="button" role="tab" aria-selected="true" aria-controls="teacherLogin" class="active">教師／管理人員</button>
+   <button id="studentRole" type="button" role="tab" aria-selected="false" aria-controls="studentLogin">學生</button>
+  </div>
+  <div id="configNotice" class="portal-error hidden" role="alert">服務連線設定尚未完成，請通知平台管理員。</div>
+  <div id="loginError" class="portal-error hidden" role="alert"></div>
+  <form id="teacherLogin" class="login-form" autocomplete="on" role="tabpanel">
+   <label>教師電子郵件<input id="teacherEmail" type="email" autocomplete="username" required placeholder="請輸入核准的教師電子郵件"></label>
+   <label>密碼<input id="teacherPassword" type="password" autocomplete="current-password" minlength="6" required placeholder="請輸入登入密碼"></label>
+   <button class="login-submit" id="teacherSubmit" type="submit">登入教學管理工作台 <span aria-hidden="true">↗</span></button>
+   <p class="login-note">須先由管理員開通教師權限；教室助理與稽核人員僅具備授權的唯讀能力。</p>
+  </form>
+  <form id="studentLogin" class="login-form hidden" autocomplete="off" role="tabpanel">
+   <label>教室代碼<input id="studentRoom" maxlength="12" required placeholder="教師提供的教室代碼" autocapitalize="characters"></label>
+   <label>學號<input id="studentNumber" maxlength="40" required placeholder="名冊登記的學號"></label>
+   <label>個人入班碼<input id="studentAccess" type="password" minlength="16" maxlength="64" required placeholder="教師發放的個人入班碼"></label>
+   <button class="login-submit" id="studentSubmit" type="submit">驗證身分並進入課堂 <span aria-hidden="true">↗</span></button>
+   <p class="login-note">個人入班碼請妥善保管。若更換裝置無法登入，請洽授課教師重設。</p>
+  </form>
+ </section>
+</section>
+<section id="unifiedApp" class="unified hidden" aria-label="ClassPoll 校園工作台">
+ <aside class="unified-sidebar" id="unifiedSidebar">
+  <div class="sidebar-campus">
+   <span class="sidebar-school">龍華科技大學</span><strong>ClassPoll 2.0</strong><span>校園教學互動平台</span>
+  </div>
+  <div class="sidebar-label" id="navigationLabel">工作模組</div>
+  <nav id="moduleNav" class="module-nav" aria-label="功能模組"></nav>
+  <div class="sidebar-user">
+    <small>目前身分</small><strong id="sessionIdentity">—</strong>
+    <button id="switchIdentity" type="button">登出／切換身分 <span aria-hidden="true">↗</span></button>
+  </div>
+ </aside>
+ <div class="unified-content">
+  <div class="unified-toolbar">
+   <button type="button" id="menuToggle" class="menu-toggle" aria-label="開啟功能選單" aria-expanded="false" aria-controls="unifiedSidebar">☰</button>
+   <div class="toolbar-heading"><small id="moduleBreadcrumb">龍華科技大學 / 校園工作台</small><strong id="currentModule">平台總覽</strong></div>
+   <div class="toolbar-actions"><span class="secure-note"><span aria-hidden="true">●</span> 已驗證身分</span><button type="button" id="refreshModule" aria-label="重新載入目前模組" title="重新載入">↻</button></div>
+  </div>
+  <div class="module-stage">
+   <iframe id="moduleFrame" title="ClassPoll 功能模組" loading="eager" referrerpolicy="strict-origin-when-cross-origin"></iframe>
+   <div id="moduleFallback" class="module-fallback hidden" role="alert">模組載入時間較長。<button id="retryModule" type="button">重新載入模組</button></div>
+  </div>
+ </div>
+ <button id="navBackdrop" type="button" class="nav-backdrop hidden" aria-label="關閉功能選單"></button>
+</section>
+</main>
+<footer id="welcomeFooter" class="welcome-footer">龍華科技大學校園教學互動平台 · ClassPoll 2.0 · 資料存取依教師與學生權限管理</footer>
+</body></html>
