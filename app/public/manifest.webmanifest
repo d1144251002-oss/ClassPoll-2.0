@@ -1,0 +1,19 @@
+{
+  "name": "ClassPoll 3.0 龍華科技大學校園平台",
+  "short_name": "ClassPoll",
+  "description": "校園教學互動與課務管理",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fa",
+  "theme_color": "#173b60",
+  "icons": [
+    {
+      "src": "./app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
