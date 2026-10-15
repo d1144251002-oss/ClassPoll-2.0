@@ -367,3 +367,9 @@ do $$ begin
 end $$;
 
 -- IMPORTANT: No teacher is created automatically. Only a DB admin can execute 02_grant_teacher.sql.
+
+-- Support owner- and student-foreign-key lookups as classes grow.
+CREATE INDEX IF NOT EXISTS cp2_bank_owner_id_idx ON public.cp2_bank(owner_id);
+CREATE INDEX IF NOT EXISTS cp2_rooms_owner_id_idx ON public.cp2_rooms(owner_id);
+CREATE INDEX IF NOT EXISTS cp2_students_auth_uid_idx ON public.cp2_students(auth_uid);
+CREATE INDEX IF NOT EXISTS cp2_votes_student_id_idx ON public.cp2_votes(student_id);
