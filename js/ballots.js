@@ -167,7 +167,9 @@ async function handleAction(event){
   }
   if(action==='invite'){
    const classroom=rooms.find(x=>x.id===roomId);
-   const url=localLink('vote.html',classroom?.code||'');
+   const invite=new URL(localLink('index.html',classroom?.code||''));
+   invite.searchParams.set('module','governance');
+   const url=invite.href;
    await navigator.clipboard.writeText(url);toast('學生正式投票連結已複製');
   }
   if(action==='results')await showResults(ballot);
