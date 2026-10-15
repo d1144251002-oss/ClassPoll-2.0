@@ -4,12 +4,12 @@
 
 ## 統一教學管理平台 — 發行候選版（2026-10-15）
 
-這項平台升級目前僅存在於 `feature/platform-launch-hardening-20261015` 及 [Draft PR #1](https://github.com/d1144251002-oss/ClassPoll-2.0/pull/1)；**正式 main 並未上線此版本**。
+平台升級來源為 [PR #1](https://github.com/d1144251002-oss/ClassPoll-2.0/pull/1)。正式發布狀態以 GitHub `main`、Pages 部署及資料庫驗收結果為準；不要把自動化測試視為零 BUG 保證。
 
 - `admin.html`：統一儀表板、各模組入口、教室角色管理、教室稽核、加密備份、名冊復原。
 - `teacher.html`：保留教室、出席、題庫、即時測驗和 Excel/CSV 匯出；新增原子化 CSV 名冊匯入及課堂問答管理。
 - `student.html`：保留原有匿名入班、限時答題及斷線補同步；新增私有學生提問與教師回覆檢視。
-- `supabase/09_platform_core.sql` / `10_classroom_qna.sql`：資料庫層權限、原子匯入、安全備份／安全還原及問答限流，仍待測試環境完整 E2E 才能正式安裝。
+- `supabase/09_platform_core.sql` / `10_classroom_qna.sql`：資料庫層權限、原子匯入、安全備份／安全還原及問答限流，已於正式 Supabase 安裝並通過遷移後的權限檢查；真實多帳號端到端與負載測試仍屬後續驗收。
 - `scripts/test-platform.mjs`、`tests/platform-ui.spec.mjs` 與 `tests/db-platform-integration.sql`：單元、真實 Chromium 介面、獨立 PostgreSQL RLS / 業務規則整合測試。
 
 **正式上線條件與資料還原限制**：請參閱 [PLATFORM_RELEASE.md](PLATFORM_RELEASE.md)。加密快照含歷史作答供保存，但頁面上的還原僅重建新教室與新名冊及新入班碼；要還原原本成績、選票和 Auth，仍需經驗證的 Supabase 全庫備份／PITR。**本系統不能承諾零 BUG。**
