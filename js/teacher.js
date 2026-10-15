@@ -56,13 +56,25 @@ async function onLogout(){
  }catch(e){failure(e,'登出失敗');}
 }
 async function getAll(table, filter=null,sort=null){
- const list=[];for(let offset=0;offset<25000;offset+=500){
-   let q=db.from(table).select('*').range(offset,offset+499);
-   if(filter)q=filter(q);
-   if(sort)q=q.order(sort,{ascending:false});
-   const page=await query(q);list.push(...(page||[]));if(!page || page.length<500)break;
+ // Stable server-side ordering avoids duplicate/missing records across range pages.
+ // Never silently return a truncated attendance, roster or grade export.
+ const pk={cp2_rooms:'id',cp2_students:'id',cp2_attendance:'student_id',
+   cp2_bank:'id',cp2_questions:'id',cp2_answer_keys:'question_id',
+   cp2_votes:'id',cp2_audit:'id',cp2_errors:'id'}[table];
+ if(!pk)throw Error('不支援的資料表查詢：'+table);
+ const pageSize=500, maxRows=100000, result=[];
+ for(let offset=0;offset<maxRows;offset+=pageSize){
+  let q=db.from(table).select('*');
+  if(filter)q=filter(q);
+  if(sort)q=q.order(sort,{ascending:false});
+  q=q.order(pk,{ascending:true});
+  if(table==='cp2_attendance')q=q.order('attended_on',{ascending:false});
+  q=q.range(offset,offset+pageSize-1);
+  const page=await query(q);
+  result.push(...(page||[]));
+  if(!page || page.length<pageSize)return result;
  }
- return list;
+ throw Error('查詢超過十萬筆，為避免資料截斷已停止匯出；請採分班與日期批次匯出');
 }
 async function refreshAll(){
  if(!authorized||refreshing)return;refreshing=true;
@@ -192,9 +204,13 @@ function renderLive(){
  $('voteRows').innerHTML=active?participantVotes(active.id).map(v=>{const s=students.find(x=>x.id===v.student_id);return `<tr><td>${esc(s?.student_no||'—')}</td><td>${esc(s?.display_name||'—')}</td><td>${'ABCDEF'[v.choice]||'—'} · ${esc(opts[v.choice]||'')}</td><td>${fmtDate(v.updated_at)}</td></tr>`;}).join('')||'<tr><td colspan="4" class="empty">目前尚無回答</td></tr>':'<tr><td colspan="4" class="empty">尚未開始測驗</td></tr>';
 }
 function computeReports(){
- const scoreMap=new Map(students.map(s=>[s.id,{學號:s.student_no,姓名:s.display_name,已作答:0,答對:0,獲得分數:0,可得總分:questions.reduce((a,q)=>a+q.points,0)}]));
+ const totalPoints=questions.reduce((sum,q)=>sum+q.points,0);
+ const questionById=new Map(questions.map(q=>[q.id,q]));
+ const studentById=new Map(students.map(s=>[s.id,s]));
+ const correctByQuestion=new Map(keys.map(k=>[k.question_id,k.correct_index]));
+ const scoreMap=new Map(students.map(s=>[s.id,{學號:s.student_no,姓名:s.display_name,已作答:0,答對:0,獲得分數:0,可得總分:totalPoints}]));
  let correct=0,graded=0;
- const detail=votes.map(v=>{const q=questions.find(q=>q.id===v.question_id);const s=students.find(s=>s.id===v.student_id);const key=q&&truth(q);
+ const detail=votes.map(v=>{const q=questionById.get(v.question_id);const s=studentById.get(v.student_id);const key=correctByQuestion.get(v.question_id);
  const passed=key!==undefined && v.choice===key;if(key!==undefined){graded++;if(passed)correct++;}
  const score=passed?q?.points||0:0;const rec=scoreMap.get(v.student_id);if(rec){rec.已作答++;rec.答對+=Number(passed);rec.獲得分數+=score;}
  return {學號:s?.student_no||'',姓名:s?.display_name||'',題目:q?.prompt||'',作答選項:'ABCDEF'[v.choice],正確答案:key===undefined?'':'ABCDEF'[key],是否答對:passed?'是':'否',得分:score,作答時間:fmtDate(v.updated_at)};});
