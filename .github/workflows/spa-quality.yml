@@ -1,0 +1,36 @@
+name: ClassPoll 3 SPA release gates
+
+on:
+  pull_request:
+    paths:
+      - 'spa/**'
+      - 'supabase/11_academic_core.sql'
+      - '.github/workflows/spa-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vue3-typescript:
+    name: Vue 3 / TypeScript build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: spa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned SPA dependencies
+        run: npm install --no-audit --no-fund
+      - name: Typecheck and compile isolated SPA
+        run: npm run build
+      - name: Confirm bundled entrypoints
+        run: |
+          test -f dist/index.html
+          test -d dist/assets
+          ! grep -R "sb_secret_" dist/
+          ! grep -R "service_role" dist/
