@@ -15,28 +15,34 @@ WITH room AS (INSERT INTO public.cp2_rooms(owner_id,code,title)
 SELECT set_config('qa.student',student_id::text,true)
  FROM public.cp2_add_student(current_setting('qa.room')::uuid,'STU11','Student One');
 SELECT public.cp3_archive_course(current_setting('qa.room')::uuid,true);
-DO $$
+RESET ROLE;
+DO $
 BEGIN
  IF (SELECT is_active FROM public.cp2_rooms WHERE id=current_setting('qa.room')::uuid)
  THEN RAISE EXCEPTION 'FAIL: archiving left room active';END IF;
  IF (SELECT archived_at IS NULL FROM public.cp3_courses WHERE room_id=current_setting('qa.room')::uuid)
  THEN RAISE EXCEPTION 'FAIL: course archive timestamp missing';END IF;
-END $$;
+END $;
+SET LOCAL ROLE authenticated;
 SELECT public.cp3_archive_course(current_setting('qa.room')::uuid,false);
 SELECT public.cp3_manage_student(current_setting('qa.student')::uuid,'disable','Course withdrawal');
-DO $$
+RESET ROLE;
+DO $
 BEGIN
  IF (SELECT is_active FROM public.cp2_students WHERE id=current_setting('qa.student')::uuid)
  THEN RAISE EXCEPTION 'FAIL: student was not disabled';END IF;
  IF NOT EXISTS(SELECT 1 FROM public.cp3_student_state WHERE student_id=current_setting('qa.student')::uuid AND removed_at IS NOT NULL)
  THEN RAISE EXCEPTION 'FAIL: missing revocation audit state';END IF;
-END $$;
+END $;
+SET LOCAL ROLE authenticated;
 SELECT public.cp3_manage_student(current_setting('qa.student')::uuid,'restore','Authorized restore');
-DO $$
+RESET ROLE;
+DO $
 BEGIN
  IF NOT (SELECT is_active FROM public.cp2_students WHERE id=current_setting('qa.student')::uuid)
  THEN RAISE EXCEPTION 'FAIL: student not restored';END IF;
-END $$;
+END $;
+SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub',current_setting('qa.other'),true),
  set_config('request.jwt.claims',jsonb_build_object('sub',current_setting('qa.other'),'role','authenticated','is_anonymous',false)::text,true);
 DO $$
