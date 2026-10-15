@@ -7,7 +7,7 @@ permissions:
 jobs:
   typed-spa:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -19,6 +19,12 @@ jobs:
         run: npm run typecheck
       - name: Production Vite build
         run: npm run build
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run actual Vue UI browser tests
+        run: npx playwright test --config app/playwright.config.ts
+        env:
+          CI: "true"
       - name: Assert SPA output, safe PWA policy and no iframe
         run: |
           test -s app/dist/index.html
