@@ -8,12 +8,19 @@ async function mockSupabase(page){
   route.fulfill({status:200,contentType:'application/javascript',
    body:route.request().url().includes('supabase-js')?sdk:''}));
 }
-test('home exposes platform administration and existing teaching modules',async({page})=>{
- await page.goto('/index.html');
- await expect(page.locator('a[href="admin.html"]')).toBeVisible();
- await expect(page.locator('a[href="teacher.html"]')).toBeVisible();
- await expect(page.locator('a[href="ballots.html"]')).toBeVisible();
+test('university unified landing identity and role selectors',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('__mock_no_auto','1'));
+ await mockSupabase(page);await page.goto('/index.html');
+ await expect(page).toHaveTitle(/龍華科技大學/);
+ await expect(page.locator('.campus-wordmark')).toContainText('龍華科技大學');
+ await expect(page.locator('#loginHeading')).toHaveText('登入校園教學平台');
+ await expect(page.locator('#teacherLogin')).toBeVisible();
+ await page.locator('#studentRole').click();
+ await expect(page.locator('#studentLogin')).toBeVisible();
+ await expect(page.locator('#teacherLogin')).toBeHidden();
+ await expect(page.locator('#studentNumber')).toBeVisible();
 });
+
 test('role-aware platform dashboard loads and filters classrooms',async({page})=>{
  await mockSupabase(page);await page.goto('/admin.html');
  await expect(page.locator('#roomTotal')).toHaveText('2');
@@ -84,4 +91,57 @@ test('teacher logout clears student private history and any transient session UI
  await expect(page.locator('#authGate')).toBeVisible();
  await expect(page.locator('#qnaList')).not.toContainText('資料結構是什麼？');
  await expect(page.locator('#studentRows')).not.toContainText('王同學');
+});
+
+test('teacher campus login enters one shell and can switch classroom and management modules',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('__mock_no_auto','1'));
+ await mockSupabase(page);await page.goto('/index.html');
+ await page.locator('#teacherEmail').fill('instructor@lhu.edu.tw');
+ await page.locator('#teacherPassword').fill('not-a-real-password');
+ await page.locator('#teacherSubmit').click();
+ await expect(page.locator('#unifiedApp')).toBeVisible();
+ await expect(page.locator('#moduleNav [data-module="rooms"]')).toBeVisible();
+ await expect(page.locator('#moduleNav [data-module="governance"]')).toHaveCount(0);
+ await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/admin\.html/);
+ const frame=page.frameLocator('#moduleFrame');
+ await expect(frame.locator('#roomTotal')).toHaveText('2');
+ await page.locator('#moduleNav [data-module="bank"]').click();
+ await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/teacher\.html\?section=bank/);
+ await expect(frame.locator('#tab-bank')).toBeVisible();
+ await expect(frame.locator('.sidebar')).toBeHidden();
+ await page.locator('#switchIdentity').click();
+ await expect(page.locator('#welcome')).toBeVisible();
+ await expect(page.locator('#moduleFrame')).not.toHaveAttribute('src',/.+/);
+});
+test('student campus entry verifies roster then shares session with class and governance modules',async({page})=>{
+ await page.addInitScript(()=>localStorage.setItem('__mock_no_auto','1'));
+ await mockSupabase(page);await page.goto('/index.html?room=QA2026&module=classroom');
+ await expect(page.locator('#studentLogin')).toBeVisible();
+ await expect(page.locator('#studentRoom')).toHaveValue('QA2026');
+ await page.locator('#studentNumber').fill('QA123');
+ await page.locator('#studentAccess').fill('1234567890abcdef1234567890abcdef');
+ await page.locator('#studentSubmit').click();
+ await expect(page.locator('#unifiedApp')).toBeVisible();
+ await expect(page.locator('#moduleNav [data-module="students"]')).toHaveCount(0);
+ await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/student\.html/);
+ const frame=page.frameLocator('#moduleFrame');
+ await expect(frame.locator('#studentPage')).toBeVisible();
+ await page.locator('#moduleNav [data-module="governance"]').click();
+ await expect(page.locator('#moduleFrame')).toHaveAttribute('src',/vote\.html/);
+ await expect(frame.locator('#voterApp')).toBeVisible();
+ await page.locator('#switchIdentity').click();
+ await expect(page.locator('#welcome')).toBeVisible();
+ await expect(page.locator('#studentAccess')).toHaveValue('');
+});
+test('mobile unified portal navigation opens and closes accessibly',async({page})=>{
+ await page.setViewportSize({width:390,height:844});
+ await mockSupabase(page);await page.goto('/index.html');
+ await expect(page.locator('#unifiedApp')).toBeVisible();
+ await page.locator('#menuToggle').click();
+ await expect(page.locator('#menuToggle')).toHaveAttribute('aria-expanded','true');
+ await expect(page.locator('#unifiedSidebar')).toHaveClass(/open/);
+ await page.locator('#navBackdrop').click({position:{x:380,y:430}});
+ await expect(page.locator('#menuToggle')).toHaveAttribute('aria-expanded','false');
+ const width=await page.evaluate(()=>document.documentElement.scrollWidth);
+ expect(width).toBeLessThanOrEqual(392);
 });
